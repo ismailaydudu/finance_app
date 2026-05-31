@@ -107,7 +107,7 @@ class _ProfilScreenState extends State<ProfilScreen> {
                                         ? FileImage(mevcutResim)
                                             as ImageProvider
                                         : const NetworkImage(
-                                          'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=150',
+                                          'https://i1.rgstatic.net/ii/profile.image/11431281796811820-1765961137549_Q512/Emir-Oeztuerk.jpg',
                                         ),
                               );
                             },

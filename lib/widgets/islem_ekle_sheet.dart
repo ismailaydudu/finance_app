@@ -16,7 +16,7 @@ class IslemEkleSheet extends StatefulWidget {
 }
 
 class _IslemEkleSheetState extends State<IslemEkleSheet> {
-  late bool _isGelir; 
+  late bool _isGelir;
   late String _secilenKategori;
 
   String _secilenOdemeYontemi = "Kart";
@@ -27,8 +27,18 @@ class _IslemEkleSheetState extends State<IslemEkleSheet> {
   final TextEditingController _aciklamaController = TextEditingController();
 
   final List<String> _aylar = [
-    "Ocak", "Şubat", "Mart", "Nisan", "Mayıs", "Haziran",
-    "Temmuz", "Ağustos", "Eylül", "Ekim", "Kasım", "Aralık",
+    "Ocak",
+    "Şubat",
+    "Mart",
+    "Nisan",
+    "Mayıs",
+    "Haziran",
+    "Temmuz",
+    "Ağustos",
+    "Eylül",
+    "Ekim",
+    "Kasım",
+    "Aralık",
   ];
 
   final List<Map<String, dynamic>> _gelirKategorileri = [
@@ -43,7 +53,11 @@ class _IslemEkleSheetState extends State<IslemEkleSheet> {
     {"baslik": "Gıda", "ikon": Icons.apple, "renk": Colors.green},
     {"baslik": "Eğlence", "ikon": Icons.sports_esports, "renk": Colors.purple},
     {"baslik": "Ulaşım", "ikon": Icons.directions_car, "renk": Colors.orange},
-    {"baslik": "Alışveriş", "ikon": Icons.shopping_bag, "renk": Colors.blueAccent},
+    {
+      "baslik": "Alışveriş",
+      "ikon": Icons.shopping_bag,
+      "renk": Colors.blueAccent,
+    },
     {"baslik": "Sağlık", "ikon": Icons.medical_services, "renk": Colors.red},
     {"baslik": "Diğer", "ikon": Icons.more_horiz, "renk": Colors.grey},
   ];
@@ -136,9 +150,11 @@ class _IslemEkleSheetState extends State<IslemEkleSheet> {
                   // 2. Boş bırakıldıysa uyarı ver ve işlemi durdur
                   if (tutarMetin.isEmpty || baslik.isEmpty) {
                     ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text("Lütfen tutar ve açıklama girin!")),
+                      const SnackBar(
+                        content: Text("Lütfen tutar ve açıklama girin!"),
+                      ),
                     );
-                    return; 
+                    return;
                   }
 
                   // 3. Tutarı metinden ondalıklı sayıya çevir
@@ -151,7 +167,8 @@ class _IslemEkleSheetState extends State<IslemEkleSheet> {
                     "kategori": _secilenKategori,
                     "islemTipi": _isGelir ? "GELIR" : "GIDER",
                     // SAĞLAM TARİH FORMATI: Tam olarak kullanıcının seçtiği takvim gününü yollar
-                    "tarih": "${_secilenTarih.year}-${_secilenTarih.month.toString().padLeft(2, '0')}-${_secilenTarih.day.toString().padLeft(2, '0')}"
+                    "tarih":
+                        "${_secilenTarih.year}-${_secilenTarih.month.toString().padLeft(2, '0')}-${_secilenTarih.day.toString().padLeft(2, '0')}",
                   };
 
                   // 5. Veriyi Backend'e Gönder
@@ -159,12 +176,14 @@ class _IslemEkleSheetState extends State<IslemEkleSheet> {
 
                   if (basarili) {
                     if (context.mounted) {
-                      Navigator.pop(context, true); 
+                      Navigator.pop(context, true);
                     }
                   } else {
                     if (context.mounted) {
                       ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text("Sunucuya bağlanılamadı!")),
+                        const SnackBar(
+                          content: Text("Sunucuya bağlanılamadı!"),
+                        ),
                       );
                     }
                   }
@@ -280,9 +299,11 @@ class _IslemEkleSheetState extends State<IslemEkleSheet> {
                   ),
                 ),
                 TextField(
-                  controller: _tutarController, 
+                  controller: _tutarController,
                   // DÜZELTME: SADECE RAKAM GİRİŞİ YAPILAN KLAVYE VE ENGELLEYİCİ
-                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                  keyboardType: const TextInputType.numberWithOptions(
+                    decimal: true,
+                  ),
                   inputFormatters: [
                     FilteringTextInputFormatter.allow(RegExp(r'^\d+\.?\d*')),
                   ],
@@ -356,7 +377,7 @@ class _IslemEkleSheetState extends State<IslemEkleSheet> {
           ),
           const SizedBox(height: 24),
           const Text(
-            "Tاريخ",
+            "Tarih",
             style: TextStyle(
               fontSize: 13,
               fontWeight: FontWeight.w500,
