@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../services/api_service.dart'; // JAVA KÖPRÜSÜNÜ BURAYA BAĞLADIK
 
 class ButceScreen extends StatelessWidget {
   const ButceScreen({super.key});
@@ -60,7 +61,25 @@ class ButceScreen extends StatelessWidget {
             width: double.infinity,
             height: 55,
             child: ElevatedButton(
-              onPressed: () {},
+              // İŞTE FÜZEYİ ATEŞLEDİĞİMİZ YER!
+              onPressed: () async {
+                // Java'ya fırlatılacak test paketi
+                Map<String, dynamic> testIslemi = {
+                  "baslik": "Netflix Üyeliği",
+                  "tutar": 120.0,
+                  "kategori": "Eğlence",
+                  "islemTipi": "GIDER",
+                  "tarih": "2026-05-30"
+                };
+
+                // Füzeyi Java'ya fırlat!
+                print("FLUTTER: Paket hazırlandı, Java'ya gönderiliyor...");
+                bool basarili = await ApiService.islemEkle(testIslemi);
+                
+                if(basarili) {
+                   print("FLUTTER: İşlem Java tarafından onaylandı!");
+                }
+              },
               style: ElevatedButton.styleFrom(
                 backgroundColor: const Color(0xFF0C4D3E),
                 shape: RoundedRectangleBorder(
@@ -74,7 +93,7 @@ class ButceScreen extends StatelessWidget {
                   Icon(Icons.add, color: Colors.white),
                   SizedBox(width: 8),
                   Text(
-                    "Bütçe Ekle",
+                    "İşlem Ekle",
                     style: TextStyle(
                       color: Colors.white,
                       fontSize: 16,
@@ -112,7 +131,7 @@ class ButceScreen extends StatelessWidget {
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      _ozetMetinGrup("Toplam Bütçe", "₺20.000"),
+                      _ozetMetinGrup("Toplam Bütçe", "₺20.000"), // Burayı da yakında dinamik yapacağız
                       _ozetMetinGrup("Harcanan", "₺13.940"),
                     ],
                   ),
@@ -141,61 +160,69 @@ class ButceScreen extends StatelessWidget {
               ),
             ),
             const SizedBox(height: 24),
+            
+            // İŞTE CANLI VERİTABANI BAĞLANTIMIZ (SİHİR BURADA BAŞLIYOR)
+            FutureBuilder<List<dynamic>>(
+              future: ApiService.islemleriGetir(),
+              builder: (context, snapshot) {
+                // 1. Veri bekleniyorsa dönen yuvarlak ikon göster
+                if (snapshot.connectionState == ConnectionState.waiting) {
+                  return const Padding(
+                    padding: EdgeInsets.all(20.0),
+                    child: Center(child: CircularProgressIndicator()),
+                  );
+                }
+                
+                // 2. Spring Boot kapalıysa veya hata varsa
+                if (snapshot.hasError) {
+                  return Center(
+                    child: Text(
+                      "Sunucuya bağlanılamadı!\nBackend çalışıyor mu?", 
+                      textAlign: TextAlign.center,
+                      style: TextStyle(color: Colors.red.shade400)
+                    )
+                  );
+                }
 
-            // KATEGORİ LİSTESİ (YENİ REHBERE GÖRE GÜNCELLENDİ)
-            _butceSatiri(
-              Icons.receipt_long,
-              Colors.blue,
-              "Fatura",
-              "₺3.200",
-              "₺4.000",
-              0.80,
-              "%80",
-            ),
-            _butceSatiri(
-              Icons.apple,
-              Colors.green,
-              "Gıda",
-              "₺2.450",
-              "₺3.500",
-              0.70,
-              "%70",
-            ),
-            _butceSatiri(
-              Icons.sports_esports,
-              Colors.purple,
-              "Eğlence",
-              "₺1.120",
-              "₺2.000",
-              0.56,
-              "%56",
-            ),
-            _butceSatiri(
-              Icons.directions_car,
-              Colors.orange,
-              "Ulaşım",
-              "₺980",
-              "₺1.500",
-              0.65,
-              "%65",
-            ),
-            _butceSatiri(
-              Icons.shopping_bag,
-              Colors.blueAccent,
-              "Alışveriş",
-              "₺1.850",
-              "₺2.500",
-              0.74,
-              "%74",
-            ),
-            _butceSatiri(
-              Icons.more_horiz,
-              Colors.grey,
-              "Diğer",
-              "₺2.340",
-              "₺2.500",
-              0.94,
-              "%94",
+                // 3. Veritabanı boşsa
+                if (!snapshot.hasData || snapshot.data!.isEmpty) {
+                  return const Center(
+                    child: Text("Henüz hiç işlem girmediniz."),
+                  );
+                }
+
+                // 4. Veriler başarıyla geldiyse listeyi çiz!
+                var islemler = snapshot.data!;
+                
+                return ListView.builder(
+                  shrinkWrap: true, // Ekranın kaydırma yapısını bozmaması için şart
+                  physics: const NeverScrollableScrollPhysics(), // İç içe kaydırmayı engeller
+                  itemCount: islemler.length,
+                  itemBuilder: (context, index) {
+                    var islem = islemler[index];
+                    
+                    // Kategoriye göre dinamik ikon ve renk belirleme
+                    IconData ikon = Icons.receipt_long;
+                    Color renk = Colors.blue;
+                    
+                    if(islem['kategori'] == 'Gıda') {
+                      ikon = Icons.restaurant;
+                      renk = Colors.orange;
+                    } else if (islem['kategori'] == 'Eğlence') {
+                      ikon = Icons.sports_esports;
+                      renk = Colors.purple;
+                    }
+
+                    return _canliIslemSatiri(
+                      ikon,
+                      renk,
+                      islem['baslik'], // "Gece Yarısı Kahvesi"
+                      islem['kategori'], // "Gıda"
+                      "₺${islem['tutar']}", // "₺95.0"
+                    );
+                  },
+                );
+              },
             ),
 
             const SizedBox(height: 20),
@@ -226,14 +253,13 @@ class ButceScreen extends StatelessWidget {
     );
   }
 
-  Widget _butceSatiri(
+  // Arkadaşının tasarımını koruyarak canlı veriye uyarladığımız yeni satır widget'ı
+  Widget _canliIslemSatiri(
     IconData ikon,
     Color renk,
     String baslik,
-    String harcanan,
-    String limit,
-    double ilerlemeOrani,
-    String yuzde,
+    String kategori,
+    String tutar,
   ) {
     return Container(
       margin: const EdgeInsets.only(bottom: 14),
@@ -261,11 +287,11 @@ class ButceScreen extends StatelessWidget {
           ),
           const SizedBox(width: 14),
           Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
                       baslik,
@@ -275,8 +301,9 @@ class ButceScreen extends StatelessWidget {
                         color: Colors.black87,
                       ),
                     ),
+                    const SizedBox(height: 4),
                     Text(
-                      "$harcanan / $limit",
+                      kategori,
                       style: TextStyle(
                         fontSize: 12,
                         fontWeight: FontWeight.w600,
@@ -285,30 +312,13 @@ class ButceScreen extends StatelessWidget {
                     ),
                   ],
                 ),
-                const SizedBox(height: 8),
-                Row(
-                  children: [
-                    Expanded(
-                      child: ClipRRect(
-                        borderRadius: BorderRadius.circular(4),
-                        child: LinearProgressIndicator(
-                          value: ilerlemeOrani,
-                          minHeight: 6,
-                          backgroundColor: Colors.grey.shade100,
-                          valueColor: AlwaysStoppedAnimation<Color>(renk),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 10),
-                    Text(
-                      yuzde,
-                      style: TextStyle(
-                        fontSize: 11,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.grey.shade500,
-                      ),
-                    ),
-                  ],
+                Text(
+                  tutar,
+                  style: const TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.redAccent,
+                  ),
                 ),
               ],
             ),

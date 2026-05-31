@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../services/api_service.dart'; // JAVA KÖPRÜSÜNÜ BURAYA DA BAĞLADIK!
 
 class IslemEkleSheet extends StatefulWidget {
   // Dışarıdan hangi sekmenin açık geleceğini parametre olarak alıyoruz
@@ -14,26 +15,19 @@ class IslemEkleSheet extends StatefulWidget {
 }
 
 class _IslemEkleSheetState extends State<IslemEkleSheet> {
-  late bool
-  _isGelir; // late kullanarak bu değerleri initState içinde eşitleyeceğiz
+  late bool _isGelir; 
   late String _secilenKategori;
 
   String _secilenOdemeYontemi = "Kart";
   DateTime _secilenTarih = DateTime.now();
 
+  // KULLANICININ YAZDIKLARINI HAFIZADA TUTAN KONTROLCÜLER (SİHİR BURADA)
+  final TextEditingController _tutarController = TextEditingController();
+  final TextEditingController _aciklamaController = TextEditingController();
+
   final List<String> _aylar = [
-    "Ocak",
-    "Şubat",
-    "Mart",
-    "Nisan",
-    "Mayıs",
-    "Haziran",
-    "Temmuz",
-    "Ağustos",
-    "Eylül",
-    "Ekim",
-    "Kasım",
-    "Aralık",
+    "Ocak", "Şubat", "Mart", "Nisan", "Mayıs", "Haziran",
+    "Temmuz", "Ağustos", "Eylül", "Ekim", "Kasım", "Aralık",
   ];
 
   final List<Map<String, dynamic>> _gelirKategorileri = [
@@ -48,11 +42,7 @@ class _IslemEkleSheetState extends State<IslemEkleSheet> {
     {"baslik": "Gıda", "ikon": Icons.apple, "renk": Colors.green},
     {"baslik": "Eğlence", "ikon": Icons.sports_esports, "renk": Colors.purple},
     {"baslik": "Ulaşım", "ikon": Icons.directions_car, "renk": Colors.orange},
-    {
-      "baslik": "Alışveriş",
-      "ikon": Icons.shopping_bag,
-      "renk": Colors.blueAccent,
-    },
+    {"baslik": "Alışveriş", "ikon": Icons.shopping_bag, "renk": Colors.blueAccent},
     {"baslik": "Sağlık", "ikon": Icons.medical_services, "renk": Colors.red},
     {"baslik": "Diğer", "ikon": Icons.more_horiz, "renk": Colors.grey},
   ];
@@ -60,10 +50,16 @@ class _IslemEkleSheetState extends State<IslemEkleSheet> {
   @override
   void initState() {
     super.initState();
-    // Sayfa ilk oluşturulurken dışarıdan gelen değere göre sekmeyi ayarla
     _isGelir = widget.initialIsGelir;
-    // Sekmeye göre varsayılan ilk kategoriyi seç (Gelirse Maaş, Giderse Fatura)
     _secilenKategori = _isGelir ? "Maaş" : "Fatura";
+  }
+
+  // Sayfa kapanırken hafızayı temizlemek iyi bir mühendislik prensibidir
+  @override
+  void dispose() {
+    _tutarController.dispose();
+    _aciklamaController.dispose();
+    super.dispose();
   }
 
   Future<void> _takvimAc(BuildContext context) async {
@@ -129,8 +125,50 @@ class _IslemEkleSheetState extends State<IslemEkleSheet> {
                   color: Colors.black87,
                 ),
               ),
+              // İŞTE ASIL SİHİR BURADA: DİNAMİK KAYDET BUTONU
               TextButton(
-                onPressed: () => Navigator.pop(context),
+                onPressed: () async {
+                  // 1. Ekrandaki yazıları al
+                  String tutarMetin = _tutarController.text.trim();
+                  String baslik = _aciklamaController.text.trim();
+
+                  // 2. Boş bırakıldıysa uyarı ver ve işlemi durdur
+                  if (tutarMetin.isEmpty || baslik.isEmpty) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text("Lütfen tutar ve açıklama girin!")),
+                    );
+                    return; 
+                  }
+
+                  // 3. Tutarı metinden ondalıklı sayıya çevir (Örn: "150" -> 150.0)
+                  double tutar = double.tryParse(tutarMetin) ?? 0.0;
+
+                  // 4. Java'nın anlayacağı formatta (JSON) paketi hazırla!
+                  Map<String, dynamic> yeniIslem = {
+                    "baslik": baslik,
+                    "tutar": tutar,
+                    "kategori": _secilenKategori,
+                    "islemTipi": _isGelir ? "GELIR" : "GIDER",
+                    // Tarihi YYYY-MM-DD formatına çeviriyoruz ki Spring Boot anlayabilsin
+                    "tarih": _secilenTarih.toIso8601String().split('T')[0]
+                  };
+
+                  // 5. Füzeyi Ateşle!
+                  bool basarili = await ApiService.islemEkle(yeniIslem);
+
+                  if (basarili) {
+                    // Kayıt başarılıysa pencereyi kapat
+                    if (context.mounted) {
+                      Navigator.pop(context, true); // true değeri göndererek ana sayfanın yenilenmesini sağlayabiliriz
+                    }
+                  } else {
+                    if (context.mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text("Sunucuya bağlanılamadı!")),
+                      );
+                    }
+                  }
+                },
                 child: const Text(
                   "Kaydet",
                   style: TextStyle(
@@ -242,6 +280,7 @@ class _IslemEkleSheetState extends State<IslemEkleSheet> {
                   ),
                 ),
                 TextField(
+                  controller: _tutarController, // CONTROLLER BAĞLANDI
                   keyboardType: TextInputType.number,
                   style: const TextStyle(
                     fontSize: 26,
@@ -299,6 +338,7 @@ class _IslemEkleSheetState extends State<IslemEkleSheet> {
             ),
           ),
           TextField(
+            controller: _aciklamaController, // CONTROLLER BAĞLANDI
             decoration: InputDecoration(
               hintText: "İşlem detayını yazın...",
               hintStyle: TextStyle(color: Colors.grey.shade400, fontSize: 15),
