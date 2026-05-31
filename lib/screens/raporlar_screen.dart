@@ -15,7 +15,14 @@ class _RaporlarScreenState extends State<RaporlarScreen> {
   int _seciliFiltreIndex = 0;
   final List<String> _filtreler = ["Genel Bakış", "Gelir", "Gider", "Tasarruf"];
 
-  // Backend'den gelen kategori isimlerine tam uyumlu renk haritası
+  // AY SEÇİCİ İÇİN GEREKLİ DEĞİŞKENLER
+  String _seciliAy = "Mayıs 2026";
+  final List<String> _aylar = [
+    "Ocak 2026", "Şubat 2026", "Mart 2026", "Nisan 2026", 
+    "Mayıs 2026", "Haziran 2026", "Temmuz 2026", "Ağustos 2026", 
+    "Eylül 2026", "Ekim 2026", "Kasım 2026", "Aralık 2026"
+  ];
+
   final Map<String, Color> _kategoriRenkleri = {
     "Fatura": Colors.blue.shade600,
     "Gıda": Colors.green.shade400,
@@ -23,10 +30,12 @@ class _RaporlarScreenState extends State<RaporlarScreen> {
     "Eğlence": Colors.purple.shade400,
     "Ulaşım": Colors.orange.shade400,
     "Kira": Colors.teal.shade400,
+    "Maaş": Colors.green.shade700,
+    "Prim": Colors.blue.shade700,
+    "Yatırım": Colors.indigo.shade400,
     "Diğer": Colors.grey.shade400,
   };
 
-  // Backend'den gelen kategori isimlerine tam uyumlu ikon haritası
   final Map<String, IconData> _kategoriIkonlari = {
     "Fatura": Icons.receipt_long,
     "Gıda": Icons.apple,
@@ -34,13 +43,67 @@ class _RaporlarScreenState extends State<RaporlarScreen> {
     "Eğlence": Icons.sports_esports_rounded,
     "Ulaşım": Icons.directions_car,
     "Kira": Icons.home,
+    "Maaş": Icons.work,
+    "Prim": Icons.star,
+    "Yatırım": Icons.trending_up,
     "Diğer": Icons.category,
   };
+
+  // ANA SAYFADAKİ ŞIK AY SEÇİCİ (BOTTOM SHEET)
+  void _aySeciciyiAc() {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (context) {
+        return Container(
+          height: 400,
+          decoration: const BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.only(topLeft: Radius.circular(24), topRight: Radius.circular(24)),
+          ),
+          child: Column(
+            children: [
+              const SizedBox(height: 12),
+              Container(width: 40, height: 4, decoration: BoxDecoration(color: Colors.grey.shade300, borderRadius: BorderRadius.circular(10))),
+              const SizedBox(height: 20),
+              const Text("Ay Seçin", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.black87)),
+              const SizedBox(height: 16),
+              Expanded(
+                child: ListView.builder(
+                  physics: const BouncingScrollPhysics(),
+                  itemCount: _aylar.length,
+                  itemBuilder: (context, index) {
+                    bool seciliMi = _seciliAy == _aylar[index];
+                    return ListTile(
+                      title: Text(
+                        _aylar[index], 
+                        style: TextStyle(
+                          fontSize: 16, 
+                          fontWeight: seciliMi ? FontWeight.bold : FontWeight.normal,
+                          color: seciliMi ? const Color(0xFF0C4D3E) : Colors.black87
+                        ),
+                        textAlign: TextAlign.center,
+                      ),
+                      tileColor: seciliMi ? const Color(0xFF0C4D3E).withAlpha(15) : Colors.transparent,
+                      onTap: () {
+                        setState(() => _seciliAy = _aylar[index]);
+                        Navigator.pop(context);
+                      },
+                    );
+                  },
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.transparent,
+      backgroundColor: const Color(0xFFF5F7FA),
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         elevation: 0,
@@ -54,21 +117,16 @@ class _RaporlarScreenState extends State<RaporlarScreen> {
             }
           },
         ),
-        title: Column(
-          children: [
-            const Text('Raporlar', style: TextStyle(color: Colors.black87, fontWeight: FontWeight.bold, fontSize: 18)),
-            const SizedBox(height: 2),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Text("Mayıs 2026", style: TextStyle(fontSize: 12, color: Colors.grey.shade600)),
-                Icon(Icons.keyboard_arrow_down, size: 14, color: Colors.grey.shade600),
-              ],
-            ),
-          ],
-        ),
+        // YAZI SİLİNDİ, TERTEMİZ BAŞLIK YAPILDI
+        title: const Text('Raporlar', style: TextStyle(color: Colors.black87, fontWeight: FontWeight.bold, fontSize: 18)),
         centerTitle: true,
-        actions: [IconButton(icon: const Icon(Icons.calendar_month_outlined, color: Colors.black87), onPressed: () {})],
+        actions: [
+          // TAKVİM İKONUNA TIKLAMA ÖZELLİĞİ (AY SEÇİCİ) BAĞLANDI
+          IconButton(
+            icon: const Icon(Icons.calendar_month_outlined, color: Colors.black87), 
+            onPressed: _aySeciciyiAc,
+          )
+        ],
       ),
       body: FutureBuilder<List<dynamic>>(
         future: ApiService.islemleriGetir(),
@@ -77,40 +135,50 @@ class _RaporlarScreenState extends State<RaporlarScreen> {
             return const Center(child: CircularProgressIndicator());
           }
 
-          double toplamGider = 0.0;
-          Map<String, double> kategoriGiderleri = {};
+          double toplamDeger = 0.0;
+          Map<String, double> kategoriDegerleri = {};
+          String grafikBasligi = "Toplam";
+          String listeBasligi = "En Çok Harcama Yapılan 3 Kategori";
 
           if (snapshot.hasData) {
             for (var islem in snapshot.data!) {
-              if (islem['islemTipi'].toString().toUpperCase() == 'GIDER') {
-                double tutar = double.tryParse(islem['tutar'].toString()) ?? 0.0;
-                toplamGider += tutar;
-                
-                // DEĞİŞİKLİK BURADA: Başlıktan uydurmak yerine backend'den gelen net kategoriyi alıyoruz
-                // Eğer backend'deki değişken adı 'category' ise burayı 'category' yapabilirsin.
-                String gelenKategoriRaw = islem['kategori']?.toString() ?? "Diğer";
-                
-                // Baş harfi büyük olacak şekilde standartlaştırıyoruz (Örn: "gıda" -> "Gıda")
-                String kategori = gelenKategoriRaw.isNotEmpty 
-                    ? gelenKategoriRaw[0].toUpperCase() + gelenKategoriRaw.substring(1).toLowerCase()
-                    : "Diğer";
+              String tip = islem['islemTipi'].toString().toUpperCase();
+              double tutar = double.tryParse(islem['tutar'].toString()) ?? 0.0;
+              String gelenKategoriRaw = islem['kategori']?.toString() ?? "Diğer";
+              String kategori = gelenKategoriRaw.isNotEmpty 
+                  ? gelenKategoriRaw[0].toUpperCase() + gelenKategoriRaw.substring(1).toLowerCase()
+                  : "Diğer";
 
-                kategoriGiderleri[kategori] = (kategoriGiderleri[kategori] ?? 0) + tutar;
+              if (_seciliFiltreIndex == 0) { 
+                grafikBasligi = "Net Bakiye";
+                listeBasligi = "En Yüksek İşlem Hacimleri";
+                toplamDeger += tutar; 
+                kategoriDegerleri[kategori] = (kategoriDegerleri[kategori] ?? 0) + tutar;
+              } 
+              else if (_seciliFiltreIndex == 1 && tip == 'GELIR') {
+                grafikBasligi = "Toplam Gelir";
+                listeBasligi = "En Çok Gelir Getiren 3 Kategori";
+                toplamDeger += tutar;
+                kategoriDegerleri[kategori] = (kategoriDegerleri[kategori] ?? 0) + tutar;
+              } 
+              else if (_seciliFiltreIndex == 2 && tip == 'GIDER') {
+                grafikBasligi = "Toplam Gider";
+                listeBasligi = "En Çok Harcama Yapılan 3 Kategori";
+                toplamDeger += tutar;
+                kategoriDegerleri[kategori] = (kategoriDegerleri[kategori] ?? 0) + tutar;
               }
             }
           }
 
-          // Kategorileri harcama miktarına göre büyükten küçüğe sıralıyoruz
-          var siraliKategoriler = kategoriGiderleri.entries.toList()
+          var siraliKategoriler = kategoriDegerleri.entries.toList()
             ..sort((a, b) => b.value.compareTo(a.value));
 
-          // Pasta grafik dilimlerini dinamik oluşturma
           List<PieChartSectionData> pastaVerileri = [];
-          if (toplamGider == 0) {
+          if (toplamDeger == 0) {
             pastaVerileri.add(PieChartSectionData(color: Colors.grey.shade300, value: 1, radius: 14, showTitle: false));
           } else {
             for (var entry in siraliKategoriler) {
-              double yuzde = (entry.value / toplamGider) * 100;
+              double yuzde = (entry.value / toplamDeger) * 100;
               if (yuzde > 0) {
                 pastaVerileri.add(
                   PieChartSectionData(
@@ -130,7 +198,6 @@ class _RaporlarScreenState extends State<RaporlarScreen> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 const SizedBox(height: 10),
-                // FİLTRELER (ORİJİNAL)
                 SingleChildScrollView(
                   scrollDirection: Axis.horizontal,
                   child: Row(
@@ -160,19 +227,17 @@ class _RaporlarScreenState extends State<RaporlarScreen> {
                   ),
                 ),
                 const SizedBox(height: 20),
-                
-                // GİDER DAĞILIMI KARTI
                 Container(
                   padding: const EdgeInsets.all(20),
                   decoration: BoxDecoration(
                     color: Colors.white,
                     borderRadius: BorderRadius.circular(24),
-                    boxShadow: [BoxShadow(color: Colors.grey.withOpacity(0.03), blurRadius: 10, offset: const Offset(0, 5))],
+                    boxShadow: [BoxShadow(color: Colors.grey.withAlpha(8), blurRadius: 10, offset: const Offset(0, 5))],
                   ),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Text("Gider Dağılımı", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.black87)),
+                      Text("${_filtreler[_seciliFiltreIndex]} Dağılımı", style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.black87)),
                       const SizedBox(height: 20),
                       Row(
                         children: [
@@ -185,9 +250,9 @@ class _RaporlarScreenState extends State<RaporlarScreen> {
                                 Column(
                                   mainAxisAlignment: MainAxisAlignment.center,
                                   children: [
-                                    const Text("Toplam Gider", style: TextStyle(fontSize: 10, color: Colors.grey)),
+                                    Text(grafikBasligi, style: const TextStyle(fontSize: 10, color: Colors.grey)),
                                     const SizedBox(height: 2),
-                                    Text("₺${toplamGider.toStringAsFixed(0)}", style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                                    Text("₺${toplamDeger.toStringAsFixed(0)}", style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
                                   ],
                                 ),
                               ],
@@ -197,7 +262,7 @@ class _RaporlarScreenState extends State<RaporlarScreen> {
                           Expanded(
                             child: Column(
                               children: siraliKategoriler.take(5).map((entry) {
-                                double yuzde = (entry.value / toplamGider) * 100;
+                                double yuzde = (entry.value / toplamDeger) * 100;
                                 return _pastaGosterge(
                                   _kategoriRenkleri[entry.key] ?? Colors.grey.shade400,
                                   entry.key,
@@ -212,14 +277,12 @@ class _RaporlarScreenState extends State<RaporlarScreen> {
                   ),
                 ),
                 const SizedBox(height: 20),
-                
-                // GELİR & GİDER TRENDİ KARTI (ORİJİNAL)
                 Container(
                   padding: const EdgeInsets.all(20),
                   decoration: BoxDecoration(
                     color: Colors.white,
                     borderRadius: BorderRadius.circular(24),
-                    boxShadow: [BoxShadow(color: Colors.grey.withOpacity(0.03), blurRadius: 10, offset: const Offset(0, 5))],
+                    boxShadow: [BoxShadow(color: Colors.grey.withAlpha(8), blurRadius: 10, offset: const Offset(0, 5))],
                   ),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -290,24 +353,22 @@ class _RaporlarScreenState extends State<RaporlarScreen> {
                   ),
                 ),
                 const SizedBox(height: 20),
-                
-                // EN ÇOK HARCAMA YAPILAN KATEGORİLER LİSTESİ
                 Container(
                   padding: const EdgeInsets.all(20),
                   decoration: BoxDecoration(
                     color: Colors.white,
                     borderRadius: BorderRadius.circular(24),
-                    boxShadow: [BoxShadow(color: Colors.grey.withOpacity(0.03), blurRadius: 10, offset: const Offset(0, 5))],
+                    boxShadow: [BoxShadow(color: Colors.grey.withAlpha(8), blurRadius: 10, offset: const Offset(0, 5))],
                   ),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Text("En Çok Harcama Yapılan 3 Kategori", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.black87)),
+                      Text(listeBasligi, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.black87)),
                       const SizedBox(height: 16),
-                      if (toplamGider == 0)
-                        const Padding(padding: EdgeInsets.only(top: 10), child: Text("Henüz gider kaydı bulunmuyor.", style: TextStyle(color: Colors.grey))),
+                      if (toplamDeger == 0)
+                        const Padding(padding: EdgeInsets.only(top: 10), child: Text("Bu filtreye uygun işlem bulunmuyor.", style: TextStyle(color: Colors.grey))),
                       ...siraliKategoriler.take(3).map((entry) {
-                        double ilerleme = entry.value / toplamGider;
+                        double ilerleme = entry.value / toplamDeger;
                         return _enCokHarcamaSatiri(
                           _kategoriIkonlari[entry.key] ?? Icons.category,
                           _kategoriRenkleri[entry.key] ?? Colors.grey,
@@ -358,7 +419,7 @@ class _RaporlarScreenState extends State<RaporlarScreen> {
       padding: const EdgeInsets.only(bottom: 14.0),
       child: Row(
         children: [
-          Container(padding: const EdgeInsets.all(10), decoration: BoxDecoration(color: renk.withOpacity(0.1), borderRadius: BorderRadius.circular(12)), child: Icon(ikon, color: renk, size: 20)),
+          Container(padding: const EdgeInsets.all(10), decoration: BoxDecoration(color: renk.withAlpha(26), borderRadius: BorderRadius.circular(12)), child: Icon(ikon, color: renk, size: 20)),
           const SizedBox(width: 14),
           SizedBox(width: 70, child: Text(baslik, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14), overflow: TextOverflow.ellipsis)),
           const SizedBox(width: 10),

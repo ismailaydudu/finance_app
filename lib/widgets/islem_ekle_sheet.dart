@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
-import '../services/api_service.dart'; // JAVA KÖPRÜSÜNÜ BURAYA DA BAĞLADIK!
+import 'package:flutter/services.dart'; // KLAVYE FİLTRESİ İÇİN EKLENDİ
+import '../services/api_service.dart'; // JAVA KÖPRÜSÜ
 
 class IslemEkleSheet extends StatefulWidget {
   // Dışarıdan hangi sekmenin açık geleceğini parametre olarak alıyoruz
@@ -21,7 +22,7 @@ class _IslemEkleSheetState extends State<IslemEkleSheet> {
   String _secilenOdemeYontemi = "Kart";
   DateTime _secilenTarih = DateTime.now();
 
-  // KULLANICININ YAZDIKLARINI HAFIZADA TUTAN KONTROLCÜLER (SİHİR BURADA)
+  // KULLANICININ YAZDIKLARINI HAFIZADA TUTAN KONTROLCÜLER
   final TextEditingController _tutarController = TextEditingController();
   final TextEditingController _aciklamaController = TextEditingController();
 
@@ -54,7 +55,7 @@ class _IslemEkleSheetState extends State<IslemEkleSheet> {
     _secilenKategori = _isGelir ? "Maaş" : "Fatura";
   }
 
-  // Sayfa kapanırken hafızayı temizlemek iyi bir mühendislik prensibidir
+  // Sayfa kapanırken hafızayı temizlemek
   @override
   void dispose() {
     _tutarController.dispose();
@@ -125,7 +126,7 @@ class _IslemEkleSheetState extends State<IslemEkleSheet> {
                   color: Colors.black87,
                 ),
               ),
-              // İŞTE ASIL SİHİR BURADA: DİNAMİK KAYDET BUTONU
+              // KAYDET BUTONU VE YENİ TARİH MANTIĞI
               TextButton(
                 onPressed: () async {
                   // 1. Ekrandaki yazıları al
@@ -140,26 +141,25 @@ class _IslemEkleSheetState extends State<IslemEkleSheet> {
                     return; 
                   }
 
-                  // 3. Tutarı metinden ondalıklı sayıya çevir (Örn: "150" -> 150.0)
+                  // 3. Tutarı metinden ondalıklı sayıya çevir
                   double tutar = double.tryParse(tutarMetin) ?? 0.0;
 
-                  // 4. Java'nın anlayacağı formatta (JSON) paketi hazırla!
+                  // 4. Java'nın anlayacağı formatta (JSON) paketi hazırla
                   Map<String, dynamic> yeniIslem = {
                     "baslik": baslik,
                     "tutar": tutar,
                     "kategori": _secilenKategori,
                     "islemTipi": _isGelir ? "GELIR" : "GIDER",
-                    // Tarihi YYYY-MM-DD formatına çeviriyoruz ki Spring Boot anlayabilsin
-                    "tarih": _secilenTarih.toIso8601String().split('T')[0]
+                    // SAĞLAM TARİH FORMATI: Tam olarak kullanıcının seçtiği takvim gününü yollar
+                    "tarih": "${_secilenTarih.year}-${_secilenTarih.month.toString().padLeft(2, '0')}-${_secilenTarih.day.toString().padLeft(2, '0')}"
                   };
 
-                  // 5. Füzeyi Ateşle!
+                  // 5. Veriyi Backend'e Gönder
                   bool basarili = await ApiService.islemEkle(yeniIslem);
 
                   if (basarili) {
-                    // Kayıt başarılıysa pencereyi kapat
                     if (context.mounted) {
-                      Navigator.pop(context, true); // true değeri göndererek ana sayfanın yenilenmesini sağlayabiliriz
+                      Navigator.pop(context, true); 
                     }
                   } else {
                     if (context.mounted) {
@@ -280,8 +280,12 @@ class _IslemEkleSheetState extends State<IslemEkleSheet> {
                   ),
                 ),
                 TextField(
-                  controller: _tutarController, // CONTROLLER BAĞLANDI
-                  keyboardType: TextInputType.number,
+                  controller: _tutarController, 
+                  // DÜZELTME: SADECE RAKAM GİRİŞİ YAPILAN KLAVYE VE ENGELLEYİCİ
+                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                  inputFormatters: [
+                    FilteringTextInputFormatter.allow(RegExp(r'^\d+\.?\d*')),
+                  ],
                   style: const TextStyle(
                     fontSize: 26,
                     fontWeight: FontWeight.bold,
@@ -338,7 +342,7 @@ class _IslemEkleSheetState extends State<IslemEkleSheet> {
             ),
           ),
           TextField(
-            controller: _aciklamaController, // CONTROLLER BAĞLANDI
+            controller: _aciklamaController,
             decoration: InputDecoration(
               hintText: "İşlem detayını yazın...",
               hintStyle: TextStyle(color: Colors.grey.shade400, fontSize: 15),
@@ -352,7 +356,7 @@ class _IslemEkleSheetState extends State<IslemEkleSheet> {
           ),
           const SizedBox(height: 24),
           const Text(
-            "Tarih",
+            "Tاريخ",
             style: TextStyle(
               fontSize: 13,
               fontWeight: FontWeight.w500,

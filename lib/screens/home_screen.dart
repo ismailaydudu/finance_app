@@ -1,11 +1,15 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
-import 'package:image_picker/image_picker.dart';
 import 'package:fl_chart/fl_chart.dart';
 import '../utils/profile_state.dart';
 import '../widgets/hizli_islemler.dart';
 import '../widgets/son_islemler.dart';
 import '../services/api_service.dart';
+
+// Yönlendirmeler için gerekli ekranların importları
+import 'raporlar_screen.dart'; 
+import 'tasarruf_hedeflerim_screen.dart'; 
+import 'profil_screen.dart'; // PROFİL SAYFASI İÇİN EKLENDİ
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -15,13 +19,63 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
-  final ImagePicker _picker = ImagePicker();
+  // 2026 Ayları için Dropdown state değişkeni
+  String _seciliAy = "Mayıs 2026";
+  final List<String> _aylar = [
+    "Ocak 2026", "Şubat 2026", "Mart 2026", "Nisan 2026", 
+    "Mayıs 2026", "Haziran 2026", "Temmuz 2026", "Ağustos 2026", 
+    "Eylül 2026", "Ekim 2026", "Kasım 2026", "Aralık 2026"
+  ];
 
-  Future<void> _profilResmiSec() async {
-    try {
-      final XFile? resim = await _picker.pickImage(source: ImageSource.gallery, imageQuality: 80);
-      if (resim != null) ProfileState.resimNotifier.value = File(resim.path);
-    } catch (e) { debugPrint("Hata: $e"); }
+  // EFSANEVİ VE ŞIK AY SEÇİCİ EKRANI (BOTTOM SHEET)
+  void _aySeciciyiAc() {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (context) {
+        return Container(
+          height: 400,
+          decoration: const BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.only(topLeft: Radius.circular(24), topRight: Radius.circular(24)),
+          ),
+          child: Column(
+            children: [
+              const SizedBox(height: 12),
+              Container(width: 40, height: 4, decoration: BoxDecoration(color: Colors.grey.shade300, borderRadius: BorderRadius.circular(10))),
+              const SizedBox(height: 20),
+              const Text("Ay Seçin", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.black87)),
+              const SizedBox(height: 16),
+              Expanded(
+                child: ListView.builder(
+                  physics: const BouncingScrollPhysics(),
+                  itemCount: _aylar.length,
+                  itemBuilder: (context, index) {
+                    bool seciliMi = _seciliAy == _aylar[index];
+                    return ListTile(
+                      title: Text(
+                        _aylar[index], 
+                        style: TextStyle(
+                          fontSize: 16, 
+                          fontWeight: seciliMi ? FontWeight.bold : FontWeight.normal,
+                          color: seciliMi ? const Color(0xFF0C4D3E) : Colors.black87
+                        ),
+                        textAlign: TextAlign.center,
+                      ),
+                      tileColor: seciliMi ? const Color(0xFF0C4D3E).withAlpha(15) : Colors.transparent,
+                      onTap: () {
+                        setState(() => _seciliAy = _aylar[index]);
+                        Navigator.pop(context);
+                      },
+                    );
+                  },
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
   }
 
   @override
@@ -50,10 +104,10 @@ class _HomeScreenState extends State<HomeScreen> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   const SizedBox(height: 16),
-                  _profilAlani(),
+                  _profilAlani(), // PROFİL ALANI BURADA ÇAĞRILIYOR
                   const SizedBox(height: 24),
                   
-                  // --- ORİJİNAL GRAFİK VE KART TASARIMI ---
+                  // --- AYLIK ÖZET KARTI ---
                   Container(
                     width: double.infinity,
                     padding: const EdgeInsets.all(24),
@@ -67,12 +121,40 @@ class _HomeScreenState extends State<HomeScreen> {
                       children: [
                         Row(
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            const Text("Aylık Özet", style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold, color: Color(0xFF0F172A))),
-                            Text("Mayıs 2026", style: TextStyle(fontSize: 13, color: Colors.grey.shade500, fontWeight: FontWeight.w600)),
+                            Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                const Text("Aylık Özet", style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold, color: Color(0xFF0F172A))),
+                                const SizedBox(height: 4),
+                                
+                                // ŞIK VE MİNİMAL AY SEÇİCİ BUTONU
+                                GestureDetector(
+                                  onTap: _aySeciciyiAc,
+                                  child: Row(
+                                    children: [
+                                      Text(_seciliAy, style: TextStyle(fontSize: 13, color: Colors.grey.shade600, fontWeight: FontWeight.w600)),
+                                      const SizedBox(width: 4),
+                                      Icon(Icons.keyboard_arrow_down_rounded, size: 16, color: Colors.grey.shade600),
+                                    ],
+                                  ),
+                                ),
+                                
+                              ],
+                            ),
+                            GestureDetector(
+                              onTap: () {
+                                Navigator.push(context, MaterialPageRoute(builder: (context) => const RaporlarScreen()));
+                              },
+                              child: Container(
+                                padding: const EdgeInsets.all(4),
+                                child: const Icon(Icons.grid_view_rounded, color: Colors.black54, size: 24),
+                              ),
+                            ),
                           ],
                         ),
-                        const SizedBox(height: 24),
+                        const SizedBox(height: 20),
                         Center(
                           child: SizedBox(
                             width: 210, height: 210,
@@ -111,7 +193,15 @@ class _HomeScreenState extends State<HomeScreen> {
                           children: [
                             _orijinalOzetKarti(Icons.arrow_upward_rounded, const Color(0xFF10B981), "Gelir", "₺${gelir.toStringAsFixed(0)}"),
                             _orijinalOzetKarti(Icons.arrow_downward_rounded, const Color(0xFFEF4444), "Gider", "₺${gider.toStringAsFixed(0)}"),
-                            _orijinalOzetKarti(Icons.savings_outlined, const Color(0xFF3B82F6), "Tasarruf", "₺${bakiye.toStringAsFixed(0)}"),
+                            _orijinalOzetKarti(
+                              Icons.savings_outlined, 
+                              const Color(0xFF3B82F6), 
+                              "Tasarruf", 
+                              "₺${bakiye.toStringAsFixed(0)}",
+                              onTap: () {
+                                Navigator.push(context, MaterialPageRoute(builder: (context) => const TasarrufHedeflerimScreen()));
+                              }
+                            ),
                           ],
                         ),
                       ],
@@ -134,39 +224,68 @@ class _HomeScreenState extends State<HomeScreen> {
   Widget _profilAlani() {
     return Row(
       children: [
+        // FOTOĞRAFA TIKLAYINCA PROFİLE GİTME İŞLEMİ
         GestureDetector(
-          onTap: _profilResmiSec,
+          onTap: () {
+            Navigator.push(context, MaterialPageRoute(builder: (context) => const ProfilScreen()));
+          },
           child: ValueListenableBuilder<File?>(
             valueListenable: ProfileState.resimNotifier,
             builder: (context, resim, _) => CircleAvatar(
               radius: 26,
-              backgroundImage: resim != null ? FileImage(resim) : const NetworkImage('https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=150') as ImageProvider,
+              backgroundImage: resim != null 
+                ? FileImage(resim) 
+                : const NetworkImage('https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=150') as ImageProvider,
             ),
           ),
         ),
         const SizedBox(width: 14),
-        ValueListenableBuilder<String>(
-          valueListenable: ProfileState.isimNotifier,
-          builder: (context, isim, _) => Text("Merhaba, $isim 👋", style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+        // YENİ SLOGANLI YAZI ALANI
+        Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            ValueListenableBuilder<String>(
+              valueListenable: ProfileState.isimNotifier,
+              builder: (context, isim, _) => Text("Merhaba, $isim 👋", style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Color(0xFF0F172A))),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              "Finansını kontrol et, geleceğini yönet.",
+              style: TextStyle(
+                fontSize: 13, 
+                color: Colors.grey.shade500, 
+                fontWeight: FontWeight.w500,
+                letterSpacing: 0.2,
+              ),
+            ),
+          ],
         ),
       ],
     );
   }
 
-  Widget _orijinalOzetKarti(IconData ikon, Color renk, String baslik, String tutar) {
+  Widget _orijinalOzetKarti(IconData ikon, Color renk, String baslik, String tutar, {VoidCallback? onTap}) {
     return Expanded(
-      child: Container(
-        margin: const EdgeInsets.symmetric(horizontal: 5),
-        padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 8),
-        decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(20), border: Border.all(color: const Color(0xFFE2E8F0).withOpacity(0.7))),
-        child: Column(
-          children: [
-            Icon(ikon, color: renk, size: 20),
-            const SizedBox(height: 8),
-            Text(baslik, style: TextStyle(fontSize: 12, color: Colors.grey.shade500, fontWeight: FontWeight.w700)),
-            const SizedBox(height: 6),
-            Text(tutar, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w800, color: Color(0xFF1E293B))),
-          ],
+      child: GestureDetector(
+        onTap: onTap,
+        child: Container(
+          margin: const EdgeInsets.symmetric(horizontal: 5),
+          padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 8),
+          decoration: BoxDecoration(
+            color: Colors.white, 
+            borderRadius: BorderRadius.circular(20), 
+            border: Border.all(color: const Color(0xFFE2E8F0).withOpacity(0.7))
+          ),
+          child: Column(
+            children: [
+              Icon(ikon, color: renk, size: 20),
+              const SizedBox(height: 8),
+              Text(baslik, style: TextStyle(fontSize: 12, color: Colors.grey.shade500, fontWeight: FontWeight.w700)),
+              const SizedBox(height: 6),
+              Text(tutar, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w800, color: const Color(0xFF1E293B))),
+            ],
+          ),
         ),
       ),
     );
