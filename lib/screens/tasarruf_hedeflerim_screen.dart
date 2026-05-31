@@ -1,7 +1,65 @@
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
+import 'hedef_ekle_screen.dart';
+import '../services/hedef_service.dart'; // Backend modelimiz ve servisimiz
 
-class TasarrufHedeflerimScreen extends StatelessWidget {
+class TasarrufHedeflerimScreen extends StatefulWidget {
   const TasarrufHedeflerimScreen({super.key});
+
+  @override
+  State<TasarrufHedeflerimScreen> createState() =>
+      _TasarrufHedeflerimScreenState();
+}
+
+class _TasarrufHedeflerimScreenState extends State<TasarrufHedeflerimScreen> {
+  late Future<List<TasarrufHedefi>> _hedeflerFuture;
+  final formatPara = NumberFormat.currency(
+    locale: 'tr_TR',
+    symbol: '₺',
+    decimalDigits: 0,
+  );
+
+  @override
+  void initState() {
+    super.initState();
+    _yenile(); // Sayfa açıldığında verileri çek
+  }
+
+  void _yenile() {
+    setState(() {
+      _hedeflerFuture = HedefService.hedefleriGetir();
+    });
+  }
+
+  // Backend'den gelen HEX renk kodunu Flutter Color nesnesine çevirir
+  Color _renkDonustur(String hexLink) {
+    String temizHex = hexLink.replaceFirst('#', '');
+    if (temizHex.length == 6) temizHex = 'FF$temizHex';
+    // Eğer backend'den geçersiz bir renk gelirse varsayılan mavi yap
+    try {
+      return Color(int.parse(temizHex, radix: 16));
+    } catch (e) {
+      return const Color(0xFF3B82F6);
+    }
+  }
+
+  // Backend'de "gorselYolu" olarak tuttuğumuz kategori ismini İkona çevirir
+  IconData _kategoriIkonuBul(String kategori) {
+    switch (kategori) {
+      case 'Alışveriş':
+        return Icons.shopping_cart_rounded;
+      case 'Teknoloji':
+        return Icons.laptop_mac_rounded;
+      case 'Tatil':
+        return Icons.flight_takeoff_rounded;
+      case 'Eğitim':
+        return Icons.school_rounded;
+      case 'Araç':
+        return Icons.directions_car_rounded;
+      default:
+        return Icons.savings_rounded; // Varsayılan
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -37,7 +95,20 @@ class TasarrufHedeflerimScreen extends StatelessWidget {
           Padding(
             padding: const EdgeInsets.only(right: 16.0),
             child: GestureDetector(
-              onTap: () {},
+              onTap: () async {
+                // YENİ HEDEF EKLEME SAYFASINA GİDİŞ
+                final sonuc = await Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => const HedefEkleScreen(),
+                  ),
+                );
+
+                // Eğer sayfadan "true" döndüyse (başarıyla kaydedildiyse) listeyi yenile
+                if (sonuc == true) {
+                  _yenile();
+                }
+              },
               child: Container(
                 width: 38,
                 height: 38,
@@ -64,190 +135,108 @@ class TasarrufHedeflerimScreen extends StatelessWidget {
         ],
       ),
 
-      // PREMIUM GÖVDE TASARIMI
-      body: Column(
-        children: [
-          // 1. KISIM: KAYDIRILABİLİR HEDEF KARTLARI LİSTESİ
-          Expanded(
-            child: SingleChildScrollView(
-              physics: const BouncingScrollPhysics(),
-              padding: const EdgeInsets.fromLTRB(20, 12, 20, 20),
-              child: Column(
-                children: [
-                  _premiumHedefKarti(
-                    ikon: Icons.beach_access_rounded,
-                    ikonRenk: const Color(0xFFF59E0B), // Canlı Amber
-                    arkaPlanRenk: const Color(0xFFFEF3C7),
-                    baslik: "Tatil",
-                    mevcutTutar: "₺12.000",
-                    hedefTutar: "₺20.000",
-                    ilerlemeOrani: 0.60,
-                    yuzdeYazisi: "%60",
-                  ),
-                  _premiumHedefKarti(
-                    ikon: Icons.laptop_mac_rounded,
-                    ikonRenk: const Color(0xFF3B82F6), // Canlı Mavi
-                    arkaPlanRenk: const Color(0xFFDBEAFE),
-                    baslik: "Yeni Laptop",
-                    mevcutTutar: "₺8.500",
-                    hedefTutar: "₺15.000",
-                    ilerlemeOrani: 0.57,
-                    yuzdeYazisi: "%57",
-                  ),
-                  _premiumHedefKarti(
-                    ikon: Icons.shield_rounded,
-                    ikonRenk: const Color(0xFF10B981), // Canlı Zümrüt Yeşili
-                    arkaPlanRenk: const Color(0xFFD1FAE5),
-                    baslik: "Acil Durum Fonu",
-                    mevcutTutar: "₺5.000",
-                    hedefTutar: "₺10.000",
-                    ilerlemeOrani: 0.50,
-                    yuzdeYazisi: "%50",
-                  ),
-                ],
+      // PREMIUM GÖVDE TASARIMI - FUTURE BUILDER İLE DİNAMİK VERİ ÇEKİMİ
+      body: FutureBuilder<List<TasarrufHedefi>>(
+        future: _hedeflerFuture,
+        builder: (context, snapshot) {
+          // Yükleniyorsa dönen çember göster
+          if (snapshot.connectionState == ConnectionState.waiting) {
+            return const Center(
+              child: CircularProgressIndicator(color: Color(0xFF3B82F6)),
+            );
+          }
+          // Hata varsa mesaj göster
+          if (snapshot.hasError) {
+            return Center(
+              child: Text(
+                "Hata oluştu: ${snapshot.error}",
+                style: const TextStyle(color: Colors.red),
               ),
-            ),
-          ),
+            );
+          }
 
-          // 2. KISIM: BOTTOM DOCK - DEGRADE GEÇİŞLİ TOPLAM BİRİKİM KARTI
-          SafeArea(
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(20, 0, 20, 16),
-              child: Container(
-                width: double.infinity,
-                decoration: BoxDecoration(
-                  // Derin Gece Mavisi ve Kraliyet Mavisi geçişi (Görselin en asil hali)
-                  gradient: const LinearGradient(
-                    colors: [Color(0xFF1E3A8A), Color(0xFF3B82F6)],
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                  ),
-                  borderRadius: BorderRadius.circular(28),
-                  boxShadow: [
-                    BoxShadow(
-                      color: const Color(0xFF2563EB).withOpacity(0.2),
-                      blurRadius: 25,
-                      offset: const Offset(0, 12),
-                    ),
-                  ],
-                ),
-                child: Column(
-                  children: [
-                    // Degrade Kısmın İçeriği
-                    Padding(
-                      padding: const EdgeInsets.all(24.0),
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                "Toplam Birikim",
-                                style: TextStyle(
-                                  color: Colors.white.withOpacity(0.75),
-                                  fontSize: 13,
-                                  fontWeight: FontWeight.w600,
-                                  letterSpacing: 0.5,
-                                ),
-                              ),
-                              const SizedBox(height: 6),
-                              const Text(
-                                "₺25.500",
-                                style: TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 32,
-                                  fontWeight: FontWeight.w900,
-                                  letterSpacing: -0.5,
-                                ),
-                              ),
-                            ],
-                          ),
-                          // İllüstrasyon Yerine Çok Estetik Katmanlı İkon Grubu
-                          Stack(
-                            alignment: Alignment.center,
-                            children: [
-                              Container(
-                                width: 50,
-                                height: 50,
-                                decoration: BoxDecoration(
-                                  color: Colors.white.withOpacity(0.12),
-                                  shape: BoxShape.circle,
-                                ),
-                              ),
-                              Icon(
-                                Icons.widgets_rounded,
-                                color: Colors.amber.shade400,
-                                size: 24,
-                              ),
-                              Transform.translate(
-                                offset: const Offset(-8, -12),
-                                child: const Icon(
-                                  Icons.spa,
-                                  color: Color(0xFF34D399),
-                                  size: 16,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ],
-                      ),
-                    ),
+          final aktifHedefler = snapshot.data ?? [];
 
-                    // Beyaz Alt Panel Kapsülü
-                    Container(
-                      padding: const EdgeInsets.all(20),
-                      decoration: const BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.vertical(
-                          bottom: Radius.circular(28),
-                        ),
-                      ),
-                      child: Column(
-                        children: [
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                            children: [
-                              const Text(
-                                "Hedeflere ulaşma oranı",
-                                style: TextStyle(
-                                  fontSize: 13,
-                                  fontWeight: FontWeight.w700,
-                                  color: Color(0xFF64748B),
-                                ),
-                              ),
-                              Text(
-                                "%55",
-                                style: TextStyle(
-                                  fontSize: 15,
-                                  fontWeight: FontWeight.w900,
-                                  color: Colors.green.shade700,
+          // Alt taraftaki mavi kart için matematiksel toplamlar
+          double toplamBiriken = aktifHedefler.fold(
+            0,
+            (sum, item) => sum + item.birikenTutar,
+          );
+          double toplamHedef = aktifHedefler.fold(
+            0,
+            (sum, item) => sum + item.hedefTutar,
+          );
+          double genelYuzde =
+              toplamHedef > 0
+                  ? (toplamBiriken / toplamHedef).clamp(0.0, 1.0)
+                  : 0.0;
+
+          return Column(
+            children: [
+              // 1. KISIM: KAYDIRILABİLİR HEDEF KARTLARI LİSTESİ
+              Expanded(
+                child: RefreshIndicator(
+                  color: const Color(0xFF3B82F6),
+                  onRefresh:
+                      () async =>
+                          _yenile(), // Aşağı kaydırarak yenileme özelliği
+                  child:
+                      aktifHedefler.isEmpty
+                          ? ListView(
+                            physics: const AlwaysScrollableScrollPhysics(),
+                            children: const [
+                              SizedBox(height: 100),
+                              Center(
+                                child: Text(
+                                  "Henüz bir hedefiniz yok.\nSağ üstteki + butonundan ekleyebilirsiniz.",
+                                  textAlign: TextAlign.center,
+                                  style: TextStyle(
+                                    color: Colors.grey,
+                                    fontSize: 14,
+                                    height: 1.5,
+                                  ),
                                 ),
                               ),
                             ],
-                          ),
-                          const SizedBox(height: 12),
-                          // Premium Kalın İlerleme Çubuğu
-                          ClipRRect(
-                            borderRadius: BorderRadius.circular(10),
-                            child: LinearProgressIndicator(
-                              value: 0.55,
-                              minHeight: 8,
-                              backgroundColor: const Color(0xFFF1F5F9),
-                              valueColor: const AlwaysStoppedAnimation<Color>(
-                                Color(0xFF10B981),
-                              ),
+                          )
+                          : ListView.builder(
+                            physics: const BouncingScrollPhysics(
+                              parent: AlwaysScrollableScrollPhysics(),
                             ),
+                            padding: const EdgeInsets.fromLTRB(20, 12, 20, 20),
+                            itemCount: aktifHedefler.length,
+                            itemBuilder: (context, index) {
+                              var hedef = aktifHedefler[index];
+                              Color anaRenk = _renkDonustur(hedef.renkKodu);
+                              IconData ikon = _kategoriIkonuBul(
+                                hedef.gorselYolu,
+                              );
+
+                              return _premiumHedefKarti(
+                                ikon: ikon,
+                                ikonRenk: anaRenk,
+                                arkaPlanRenk: anaRenk.withOpacity(
+                                  0.12,
+                                ), // Rengin çok saydam hali arka plan olur
+                                baslik: hedef.baslik,
+                                mevcutTutar: formatPara.format(
+                                  hedef.birikenTutar,
+                                ),
+                                hedefTutar: formatPara.format(hedef.hedefTutar),
+                                ilerlemeOrani: hedef.ilerlemeOrani,
+                                yuzdeYazisi:
+                                    "%${(hedef.ilerlemeOrani * 100).toInt()}",
+                              );
+                            },
                           ),
-                        ],
-                      ),
-                    ),
-                  ],
                 ),
               ),
-            ),
-          ),
-        ],
+
+              // 2. KISIM: BOTTOM DOCK - DEGRADE GEÇİŞLİ TOPLAM BİRİKİM KARTI
+              _toplamBirikimKarti(toplamBiriken, genelYuzde),
+            ],
+          );
+        },
       ),
     );
   }
@@ -343,7 +332,7 @@ class TasarrufHedeflerimScreen extends StatelessWidget {
                           backgroundColor: const Color(0xFFF1F5F9),
                           // Eğer mavi kartsa yeşil çiz, diğerlerinde kendi rengini koru (Görsel detayı)
                           valueColor: AlwaysStoppedAnimation<Color>(
-                            ikonRenk == const Color(0xFF3B82F6)
+                            ikonRenk.value == const Color(0xFF3B82F6).value
                                 ? const Color(0xFF10B981)
                                 : ikonRenk,
                           ),
@@ -366,6 +355,149 @@ class TasarrufHedeflerimScreen extends StatelessWidget {
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  // ALTT KISIMDAKİ MAVİ DEGRADE KART
+  Widget _toplamBirikimKarti(double toplamBiriken, double genelYuzde) {
+    int yuzdeTamSayi = (genelYuzde * 100).toInt();
+
+    return SafeArea(
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(20, 0, 20, 16),
+        child: Container(
+          width: double.infinity,
+          decoration: BoxDecoration(
+            // Derin Gece Mavisi ve Kraliyet Mavisi geçişi
+            gradient: const LinearGradient(
+              colors: [Color(0xFF1E3A8A), Color(0xFF3B82F6)],
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+            ),
+            borderRadius: BorderRadius.circular(28),
+            boxShadow: [
+              BoxShadow(
+                color: const Color(0xFF2563EB).withOpacity(0.2),
+                blurRadius: 25,
+                offset: const Offset(0, 12),
+              ),
+            ],
+          ),
+          child: Column(
+            children: [
+              // Degrade Kısmın İçeriği
+              Padding(
+                padding: const EdgeInsets.all(24.0),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          "Toplam Birikim",
+                          style: TextStyle(
+                            color: Colors.white.withOpacity(0.75),
+                            fontSize: 13,
+                            fontWeight: FontWeight.w600,
+                            letterSpacing: 0.5,
+                          ),
+                        ),
+                        const SizedBox(height: 6),
+                        Text(
+                          formatPara.format(toplamBiriken), // DİNAMİK TUTAR
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 32,
+                            fontWeight: FontWeight.w900,
+                            letterSpacing: -0.5,
+                          ),
+                        ),
+                      ],
+                    ),
+                    // Çok Estetik Katmanlı İkon Grubu
+                    Stack(
+                      alignment: Alignment.center,
+                      children: [
+                        Container(
+                          width: 50,
+                          height: 50,
+                          decoration: BoxDecoration(
+                            color: Colors.white.withOpacity(0.12),
+                            shape: BoxShape.circle,
+                          ),
+                        ),
+                        Icon(
+                          Icons.widgets_rounded,
+                          color: Colors.amber.shade400,
+                          size: 24,
+                        ),
+                        Transform.translate(
+                          offset: const Offset(-8, -12),
+                          child: const Icon(
+                            Icons.spa,
+                            color: Color(0xFF34D399),
+                            size: 16,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+
+              // Beyaz Alt Panel Kapsülü
+              Container(
+                padding: const EdgeInsets.all(20),
+                decoration: const BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.vertical(
+                    bottom: Radius.circular(28),
+                  ),
+                ),
+                child: Column(
+                  children: [
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        const Text(
+                          "Hedeflere ulaşma oranı",
+                          style: TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w700,
+                            color: Color(0xFF64748B),
+                          ),
+                        ),
+                        Text(
+                          "%$yuzdeTamSayi", // DİNAMİK YÜZDE YAZISI
+                          style: TextStyle(
+                            fontSize: 15,
+                            fontWeight: FontWeight.w900,
+                            color: Colors.green.shade700,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+                    // Premium Kalın İlerleme Çubuğu
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(10),
+                      child: LinearProgressIndicator(
+                        value: genelYuzde, // DİNAMİK YÜZDE BARI
+                        minHeight: 8,
+                        backgroundColor: const Color(0xFFF1F5F9),
+                        valueColor: const AlwaysStoppedAnimation<Color>(
+                          Color(0xFF10B981),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }

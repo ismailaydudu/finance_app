@@ -2,7 +2,7 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 
 class ApiService {
-  static const String baseUrl = 'http://10.153.206.62:8080/api';
+  static const String baseUrl = 'http://192.168.1.19:8080/api';
 
   // İşlemleri çek
   static Future<List<dynamic>> islemleriGetir() async {
@@ -19,12 +19,12 @@ class ApiService {
     try {
       List<dynamic> islemler = await islemleriGetir();
       double bakiye = 0.0;
-      
+
       for (var i in islemler) {
         // Tutar null veya hatalıysa 0 al
         double tutar = double.tryParse(i['tutar'].toString()) ?? 0.0;
         String tip = (i['islemTipi'] ?? 'GIDER').toString().toUpperCase();
-        
+
         if (tip == 'GELIR') {
           bakiye += tutar;
         } else {
@@ -52,7 +52,7 @@ class ApiService {
   static Future<bool> islemEkle(Map<String, dynamic> yeniIslem) async {
     try {
       final response = await http.post(
-        Uri.parse('$baseUrl/islemler'), 
+        Uri.parse('$baseUrl/islemler'),
         headers: {
           "Content-Type": "application/json",
           "Accept": "application/json",
