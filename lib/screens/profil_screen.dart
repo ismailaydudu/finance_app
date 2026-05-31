@@ -1,7 +1,10 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:onyuz/screens/login_screen.dart';
+import 'package:shared_preferences/shared_preferences.dart'; // Hafıza yönetimi için şart
 import '../utils/profile_state.dart';
+import 'register_page.dart'; // Çıkış yaptıktan sonra fırlatacağımız sayfa
 
 class ProfilScreen extends StatefulWidget {
   const ProfilScreen({super.key});
@@ -12,6 +15,45 @@ class ProfilScreen extends StatefulWidget {
 
 class _ProfilScreenState extends State<ProfilScreen> {
   final ImagePicker _picker = ImagePicker();
+  String _kullaniciEmail = "E-posta yükleniyor..."; // Dinamik e-posta için alan
+
+  @override
+  void initState() {
+    super.initState();
+    _kullaniciBilgileriniYukle();
+  }
+
+  // Giriş/Kayıt esnasında saklanan e-postayı hafızadan çeken fonksiyon
+  Future<void> _kullaniciBilgileriniYukle() async {
+    final prefs = await SharedPreferences.getInstance();
+    final email = prefs.getString('userEmail');
+    if (email != null && email.isNotEmpty) {
+      setState(() {
+        _kullaniciEmail = email;
+      });
+    }
+  }
+
+  // BOMBA GİBİ ÇIKIŞ YAPMA FONKSİYONU
+  Future<void> _cikisYap() async {
+    setState(() {}); // Loading koymak istersen tetiklesin diye
+
+    final prefs = await SharedPreferences.getInstance();
+    // Hafızadaki bütün kilitleri patlatıyoruz
+    await prefs.setBool('isLoggedIn', false);
+    await prefs.remove('userName');
+    await prefs.remove('userEmail');
+
+    if (mounted) {
+      // Geçmişteki tüm sayfaları (MainLayout, HomeScreen vb.) hafızadan kazıyoruz
+      Navigator.pushAndRemoveUntil(
+        context,
+        MaterialPageRoute(builder: (context) => const LoginScreen()),
+        (route) =>
+            false, // Geri tuşuna basınca uygulamaya kaçak girmesini engeller
+      );
+    }
+  }
 
   Future<void> _galeridenResimSec() async {
     try {
@@ -31,9 +73,7 @@ class _ProfilScreenState extends State<ProfilScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      // Garip arka plan yansımalarını engellemek için net modern gri tonu
       backgroundColor: const Color(0xFFF8FAFC),
-
       body: SingleChildScrollView(
         physics: const BouncingScrollPhysics(),
         child: Column(
@@ -43,18 +83,17 @@ class _ProfilScreenState extends State<ProfilScreen> {
               width: double.infinity,
               padding: const EdgeInsets.fromLTRB(24, 60, 24, 32),
               decoration: const BoxDecoration(
-                color: Color(0xFF0C4D3E), // Kurumsal asil yeşil
+                color: Color(0xFF0C4D3E),
                 borderRadius: BorderRadius.vertical(
                   bottom: Radius.circular(36),
                 ),
               ),
               child: Column(
                 children: [
-                  // Başlık ve Sağ Üst Buton
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      const SizedBox(width: 40), // Simetri sağlamak için boşluk
+                      const SizedBox(width: 40),
                       const Text(
                         "Profilim",
                         style: TextStyle(
@@ -82,16 +121,13 @@ class _ProfilScreenState extends State<ProfilScreen> {
                   ),
                   const SizedBox(height: 24),
 
-                  // TIKLANABİLİR SENKRONİZE FOTOĞRAF ÇERÇEVESİ
                   GestureDetector(
                     onTap: _galeridenResimSec,
                     child: Stack(
                       alignment: Alignment.bottomRight,
                       children: [
                         Container(
-                          padding: const EdgeInsets.all(
-                            4,
-                          ), // Dış beyaz lüks halka
+                          padding: const EdgeInsets.all(4),
                           decoration: const BoxDecoration(
                             color: Colors.white,
                             shape: BoxShape.circle,
@@ -105,15 +141,14 @@ class _ProfilScreenState extends State<ProfilScreen> {
                                 backgroundImage:
                                     mevcutResim != null
                                         ? FileImage(mevcutResim)
-                                            as ImageProvider
                                         : const NetworkImage(
-                                          'https://i1.rgstatic.net/ii/profile.image/11431281796811820-1765961137549_Q512/Emir-Oeztuerk.jpg',
-                                        ),
+                                              'https://i1.rgstatic.net/ii/profile.image/11431281796811820-1765961137549_Q512/Emir-Oeztuerk.jpg',
+                                            )
+                                            as ImageProvider,
                               );
                             },
                           ),
                         ),
-                        // Düzenleme Rozeti
                         Container(
                           padding: const EdgeInsets.all(6),
                           decoration: const BoxDecoration(
@@ -131,7 +166,6 @@ class _ProfilScreenState extends State<ProfilScreen> {
                   ),
                   const SizedBox(height: 16),
 
-                  // SENKRONİZE İSİM ALANI
                   ValueListenableBuilder<String>(
                     valueListenable: ProfileState.isimNotifier,
                     builder: (context, mevcutIsim, child) {
@@ -147,8 +181,9 @@ class _ProfilScreenState extends State<ProfilScreen> {
                     },
                   ),
                   const SizedBox(height: 4),
+                  // Dinamik olarak hafızadan gelen e-postayı buraya basıyoruz
                   Text(
-                    "arda@email.com",
+                    _kullaniciEmail,
                     style: TextStyle(
                       color: Colors.white.withOpacity(0.65),
                       fontSize: 13,
@@ -159,12 +194,11 @@ class _ProfilScreenState extends State<ProfilScreen> {
               ),
             ),
 
-            // 2. BÖLÜM: İÇERİK ALANI (Geniş Ekran Ölçülü Kartlar)
+            // 2. BÖLÜM: İÇERİK ALANI
             Padding(
               padding: const EdgeInsets.all(20.0),
               child: Column(
                 children: [
-                  // FİNANSAL SKORUM KARTI
                   Container(
                     padding: const EdgeInsets.all(20),
                     decoration: BoxDecoration(
@@ -188,7 +222,7 @@ class _ProfilScreenState extends State<ProfilScreen> {
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
                                 const Text(
-                                  "Finansal Skorum",
+                                  "Finansial Skorum",
                                   style: TextStyle(
                                     fontSize: 14,
                                     fontWeight: FontWeight.w800,
@@ -252,7 +286,6 @@ class _ProfilScreenState extends State<ProfilScreen> {
                   ),
                   const SizedBox(height: 20),
 
-                  // LÜKS MENÜ LİSTESİ KAPSÜLÜ
                   Container(
                     decoration: BoxDecoration(
                       color: Colors.white,
@@ -297,7 +330,7 @@ class _ProfilScreenState extends State<ProfilScreen> {
                   ),
                   const SizedBox(height: 20),
 
-                  // ÇIKIŞ BUTONU
+                  // AKTİF VE YENİLENMİŞ ÇIKIŞ YAPMA ALANI
                   Container(
                     width: double.infinity,
                     decoration: BoxDecoration(
@@ -312,7 +345,7 @@ class _ProfilScreenState extends State<ProfilScreen> {
                       ],
                     ),
                     child: InkWell(
-                      onTap: () {},
+                      onTap: _cikisYap, // Buraya köprüyü çaktık!
                       borderRadius: BorderRadius.circular(20),
                       child: const Padding(
                         padding: EdgeInsets.symmetric(vertical: 16),
@@ -338,7 +371,7 @@ class _ProfilScreenState extends State<ProfilScreen> {
                       ),
                     ),
                   ),
-                  const SizedBox(height: 100), // Alt bar payı
+                  const SizedBox(height: 100),
                 ],
               ),
             ),
@@ -348,7 +381,6 @@ class _ProfilScreenState extends State<ProfilScreen> {
     );
   }
 
-  // Pürüzsüz ve simetrik satır üretici
   Widget _premiumMenuSatiri(
     IconData ikon,
     String baslik, {
@@ -378,9 +410,9 @@ class _ProfilScreenState extends State<ProfilScreen> {
           ),
         ),
         if (!sonElemanMi)
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 20.0),
-            child: Divider(color: const Color(0xFFF1F5F9), height: 1),
+          const Padding(
+            padding: EdgeInsets.symmetric(horizontal: 20.0),
+            child: Divider(color: Color(0xFFF1F5F9), height: 1),
           ),
       ],
     );

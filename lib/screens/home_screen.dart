@@ -1,6 +1,7 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:fl_chart/fl_chart.dart';
+import 'package:shared_preferences/shared_preferences.dart'; // Hafızadan ismi okumak için eklendi
 import '../utils/profile_state.dart';
 import '../widgets/hizli_islemler.dart';
 import '../widgets/son_islemler.dart';
@@ -9,7 +10,7 @@ import '../services/api_service.dart';
 // Yönlendirmeler için gerekli ekranların importları
 import 'raporlar_screen.dart';
 import 'tasarruf_hedeflerim_screen.dart';
-import 'profil_screen.dart'; // PROFİL SAYFASI İÇİN EKLENDİ
+import 'profil_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -19,8 +20,9 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
-  // 2026 Ayları için Dropdown state değişkeni
   String _seciliAy = "Mayıs 2026";
+  String _kullaniciIsmi = "Kullanıcı"; // Varsayılan isim değeri
+
   final List<String> _aylar = [
     "Ocak 2026",
     "Şubat 2026",
@@ -35,6 +37,25 @@ class _HomeScreenState extends State<HomeScreen> {
     "Kasım 2026",
     "Aralık 2026",
   ];
+
+  @override
+  void initState() {
+    super.initState();
+    _kullaniciIsminiYukle();
+  }
+
+  // Kayıt sayfasında yazdığın ismi SharedPreferences'tan çeken fonksiyon
+  Future<void> _kullaniciIsminiYukle() async {
+    final prefs = await SharedPreferences.getInstance();
+    final isim = prefs.getString('userName'); // Register'da kaydettiğimiz key
+    if (isim != null && isim.isNotEmpty) {
+      setState(() {
+        _kullaniciIsmi = isim;
+      });
+      // Eğer projedeki profile_state notifier yapısını tetiklemek istersen:
+      ProfileState.isimNotifier.value = isim;
+    }
+  }
 
   // EFSANEVİ VE ŞIK AY SEÇİCİ EKRANI (BOTTOM SHEET)
   void _aySeciciyiAc() {
@@ -121,13 +142,21 @@ class _HomeScreenState extends State<HomeScreen> {
           builder: (context, snapshot) {
             double gelir = 0;
             double gider = 0;
+
+            if (snapshot.connectionState == ConnectionState.waiting) {
+              return const Center(
+                child: CircularProgressIndicator(color: Color(0xFF0C4D3E)),
+              );
+            }
+
             if (snapshot.hasData) {
               for (var i in snapshot.data!) {
                 double tutar = double.tryParse(i['tutar'].toString()) ?? 0.0;
-                if (i['islemTipi'].toString().toUpperCase() == 'GELIR')
+                if (i['islemTipi'].toString().toUpperCase() == 'GELIR') {
                   gelir += tutar;
-                else
+                } else {
                   gider += tutar;
+                }
               }
             }
             double bakiye = gelir - gider;
@@ -139,7 +168,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   const SizedBox(height: 16),
-                  _profilAlani(), // PROFİL ALANI BURADA ÇAĞRILIYOR
+                  _profilAlani(), // İsminin gözükeceği alan
                   const SizedBox(height: 24),
 
                   // --- AYLIK ÖZET KARTI ---
@@ -176,8 +205,6 @@ class _HomeScreenState extends State<HomeScreen> {
                                   ),
                                 ),
                                 const SizedBox(height: 4),
-
-                                // ŞIK VE MİNİMAL AY SEÇİCİ BUTONU
                                 GestureDetector(
                                   onTap: _aySeciciyiAc,
                                   child: Row(
@@ -349,7 +376,6 @@ class _HomeScreenState extends State<HomeScreen> {
   Widget _profilAlani() {
     return Row(
       children: [
-        // FOTOĞRAFA TIKLAYINCA PROFİLE GİTME İŞLEMİ
         GestureDetector(
           onTap: () {
             Navigator.push(
@@ -373,22 +399,18 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
         ),
         const SizedBox(width: 14),
-        // YENİ SLOGANLI YAZI ALANI
         Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            ValueListenableBuilder<String>(
-              valueListenable: ProfileState.isimNotifier,
-              builder:
-                  (context, isim, _) => Text(
-                    "Merhaba, $isim 👋",
-                    style: const TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                      color: Color(0xFF0F172A),
-                    ),
-                  ),
+            // Doğrudan hafızadan yüklenen ismi ekrana basıyoruz!
+            Text(
+              "Merhaba, $_kullaniciIsmi 👋",
+              style: const TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+                color: Color(0xFF0F172A),
+              ),
             ),
             const SizedBox(height: 4),
             Text(
@@ -442,7 +464,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 style: const TextStyle(
                   fontSize: 14,
                   fontWeight: FontWeight.w800,
-                  color: const Color(0xFF1E293B),
+                  color: Color(0xFF1E293B),
                 ),
               ),
             ],
