@@ -1,15 +1,11 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart'; // KLAVYE FİLTRESİ İÇİN EKLENDİ
-import '../services/api_service.dart'; // JAVA KÖPRÜSÜ
+import 'package:flutter/services.dart';
+import '../services/api_service.dart';
 
 class IslemEkleSheet extends StatefulWidget {
-  // Dışarıdan hangi sekmenin açık geleceğini parametre olarak alıyoruz
   final bool initialIsGelir;
 
-  const IslemEkleSheet({
-    super.key,
-    this.initialIsGelir = true, // Varsayılan olarak Gelir açık gelsin
-  });
+  const IslemEkleSheet({super.key, this.initialIsGelir = true});
 
   @override
   State<IslemEkleSheet> createState() => _IslemEkleSheetState();
@@ -21,8 +17,8 @@ class _IslemEkleSheetState extends State<IslemEkleSheet> {
 
   String _secilenOdemeYontemi = "Kart";
   DateTime _secilenTarih = DateTime.now();
+  bool _isSaving = false; // Yüklenme çarkı için
 
-  // KULLANICININ YAZDIKLARINI HAFIZADA TUTAN KONTROLCÜLER
   final TextEditingController _tutarController = TextEditingController();
   final TextEditingController _aciklamaController = TextEditingController();
 
@@ -69,7 +65,6 @@ class _IslemEkleSheetState extends State<IslemEkleSheet> {
     _secilenKategori = _isGelir ? "Maaş" : "Fatura";
   }
 
-  // Sayfa kapanırken hafızayı temizlemek
   @override
   void dispose() {
     _tutarController.dispose();
@@ -103,339 +98,379 @@ class _IslemEkleSheetState extends State<IslemEkleSheet> {
     }
   }
 
+  // YENİ EKLEDİĞİMİZ VERİ KAYDETME FONKSİYONU
+  void _veriyiKaydet() async {
+    String tutarMetin = _tutarController.text.trim();
+    String baslik = _aciklamaController.text.trim();
+
+    if (tutarMetin.isEmpty || baslik.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Lütfen tutar ve açıklama girin!")),
+      );
+      return;
+    }
+
+    setState(() => _isSaving = true); // Butonu dönen çarka çevirir
+
+    double tutar = double.tryParse(tutarMetin) ?? 0.0;
+
+    Map<String, dynamic> yeniIslem = {
+      "baslik": baslik,
+      "tutar": tutar,
+      "kategori": _secilenKategori,
+      "islemTipi": _isGelir ? "GELIR" : "GIDER",
+      "tarih":
+          "${_secilenTarih.year}-${_secilenTarih.month.toString().padLeft(2, '0')}-${_secilenTarih.day.toString().padLeft(2, '0')}",
+    };
+
+    bool basarili = await ApiService.islemEkle(yeniIslem);
+
+    setState(() => _isSaving = false);
+
+    if (basarili) {
+      if (mounted) Navigator.pop(context, true); // Ekranı başarılı kodla kapat
+    } else {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text("Sunucuya bağlanılamadı!")),
+        );
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final aktifKategoriler = _isGelir ? _gelirKategorileri : _giderKategorileri;
 
     return Padding(
+      // Klavye açılınca ekranı ittirsin diye viewInsets eklendi
       padding: EdgeInsets.only(
         top: 16,
         left: 20,
         right: 20,
         bottom: MediaQuery.of(context).viewInsets.bottom + 20,
       ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              TextButton(
-                onPressed: () => Navigator.pop(context),
-                child: const Text(
-                  "İptal",
-                  style: TextStyle(
-                    color: Color(0xFF0C4D3E),
-                    fontSize: 16,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-              ),
-              const Text(
-                "İşlem Ekle",
-                style: TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.bold,
-                  color: Colors.black87,
-                ),
-              ),
-              // KAYDET BUTONU VE YENİ TARİH MANTIĞI
-              TextButton(
-                onPressed: () async {
-                  // 1. Ekrandaki yazıları al
-                  String tutarMetin = _tutarController.text.trim();
-                  String baslik = _aciklamaController.text.trim();
-
-                  // 2. Boş bırakıldıysa uyarı ver ve işlemi durdur
-                  if (tutarMetin.isEmpty || baslik.isEmpty) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text("Lütfen tutar ve açıklama girin!"),
-                      ),
-                    );
-                    return;
-                  }
-
-                  // 3. Tutarı metinden ondalıklı sayıya çevir
-                  double tutar = double.tryParse(tutarMetin) ?? 0.0;
-
-                  // 4. Java'nın anlayacağı formatta (JSON) paketi hazırla
-                  Map<String, dynamic> yeniIslem = {
-                    "baslik": baslik,
-                    "tutar": tutar,
-                    "kategori": _secilenKategori,
-                    "islemTipi": _isGelir ? "GELIR" : "GIDER",
-                    // SAĞLAM TARİH FORMATI: Tam olarak kullanıcının seçtiği takvim gününü yollar
-                    "tarih":
-                        "${_secilenTarih.year}-${_secilenTarih.month.toString().padLeft(2, '0')}-${_secilenTarih.day.toString().padLeft(2, '0')}",
-                  };
-
-                  // 5. Veriyi Backend'e Gönder
-                  bool basarili = await ApiService.islemEkle(yeniIslem);
-
-                  if (basarili) {
-                    if (context.mounted) {
-                      Navigator.pop(context, true);
-                    }
-                  } else {
-                    if (context.mounted) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                          content: Text("Sunucuya bağlanılamadı!"),
-                        ),
-                      );
-                    }
-                  }
-                },
-                child: const Text(
-                  "Kaydet",
-                  style: TextStyle(
-                    color: Color(0xFF0C4D3E),
-                    fontSize: 16,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 20),
-          Row(
-            children: [
-              Expanded(
-                child: GestureDetector(
-                  onTap:
-                      () => setState(() {
-                        _isGelir = true;
-                        _secilenKategori = _gelirKategorileri[0]["baslik"];
-                      }),
-                  child: Container(
-                    height: 50,
-                    decoration: BoxDecoration(
-                      color:
-                          _isGelir
-                              ? const Color(0xFF10B981)
-                              : Colors.grey.shade100,
-                      borderRadius: BorderRadius.circular(25),
-                    ),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Icon(
-                          Icons.sync_alt,
-                          color: _isGelir ? Colors.white : Colors.grey,
-                        ),
-                        const SizedBox(width: 8),
-                        Text(
-                          "Gelir",
-                          style: TextStyle(
-                            color:
-                                _isGelir ? Colors.white : Colors.grey.shade700,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              ),
-              const SizedBox(width: 16),
-              Expanded(
-                child: GestureDetector(
-                  onTap:
-                      () => setState(() {
-                        _isGelir = false;
-                        _secilenKategori = _giderKategorileri[0]["baslik"];
-                      }),
-                  child: Container(
-                    height: 50,
-                    decoration: BoxDecoration(
-                      color:
-                          !_isGelir
-                              ? const Color(0xFFEF4444)
-                              : Colors.grey.shade100,
-                      borderRadius: BorderRadius.circular(25),
-                    ),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Icon(
-                          Icons.sync_alt,
-                          color: !_isGelir ? Colors.white : Colors.grey,
-                        ),
-                        const SizedBox(width: 8),
-                        Text(
-                          "Gider",
-                          style: TextStyle(
-                            color:
-                                !_isGelir ? Colors.white : Colors.grey.shade700,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 24),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(20),
-              border: Border.all(color: Colors.grey.shade200),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+      child: SingleChildScrollView(
+        // Ekran daralırsa scroll edilebilsin
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // ÜST KISIM (BAŞLIK VE İPTAL)
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Text(
-                  "Tutar",
-                  style: TextStyle(
-                    fontSize: 13,
-                    color: Colors.grey.shade500,
-                    fontWeight: FontWeight.w500,
+                TextButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: const Text(
+                    "İptal",
+                    style: TextStyle(
+                      color: Color(0xFF0C4D3E),
+                      fontSize: 16,
+                      fontWeight: FontWeight.w600,
+                    ),
                   ),
                 ),
-                TextField(
-                  controller: _tutarController,
-                  // DÜZELTME: SADECE RAKAM GİRİŞİ YAPILAN KLAVYE VE ENGELLEYİCİ
-                  keyboardType: const TextInputType.numberWithOptions(
-                    decimal: true,
-                  ),
-                  inputFormatters: [
-                    FilteringTextInputFormatter.allow(RegExp(r'^\d+\.?\d*')),
-                  ],
-                  style: const TextStyle(
-                    fontSize: 26,
+                const Text(
+                  "İşlem Ekle",
+                  style: TextStyle(
+                    fontSize: 18,
                     fontWeight: FontWeight.bold,
+                    color: Colors.black87,
                   ),
-                  decoration: InputDecoration(
-                    prefixText: "₺ ",
-                    prefixStyle: const TextStyle(
-                      fontSize: 26,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.black87,
+                ),
+                const SizedBox(
+                  width: 48,
+                ), // Dengelemek için sağa boşluk bıraktık
+              ],
+            ),
+            const SizedBox(height: 20),
+
+            // GELİR / GİDER SEÇİCİ
+            Row(
+              children: [
+                Expanded(
+                  child: GestureDetector(
+                    onTap:
+                        () => setState(() {
+                          _isGelir = true;
+                          _secilenKategori = _gelirKategorileri[0]["baslik"];
+                        }),
+                    child: Container(
+                      height: 50,
+                      decoration: BoxDecoration(
+                        color:
+                            _isGelir
+                                ? const Color(0xFF10B981)
+                                : Colors.grey.shade100,
+                        borderRadius: BorderRadius.circular(25),
+                      ),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(
+                            Icons.sync_alt,
+                            color: _isGelir ? Colors.white : Colors.grey,
+                          ),
+                          const SizedBox(width: 8),
+                          Text(
+                            "Gelir",
+                            style: TextStyle(
+                              color:
+                                  _isGelir
+                                      ? Colors.white
+                                      : Colors.grey.shade700,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
-                    border: InputBorder.none,
-                    hintText: "0.00",
-                    hintStyle: TextStyle(color: Colors.grey.shade300),
+                  ),
+                ),
+                const SizedBox(width: 16),
+                Expanded(
+                  child: GestureDetector(
+                    onTap:
+                        () => setState(() {
+                          _isGelir = false;
+                          _secilenKategori = _giderKategorileri[0]["baslik"];
+                        }),
+                    child: Container(
+                      height: 50,
+                      decoration: BoxDecoration(
+                        color:
+                            !_isGelir
+                                ? const Color(0xFFEF4444)
+                                : Colors.grey.shade100,
+                        borderRadius: BorderRadius.circular(25),
+                      ),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(
+                            Icons.sync_alt,
+                            color: !_isGelir ? Colors.white : Colors.grey,
+                          ),
+                          const SizedBox(width: 8),
+                          Text(
+                            "Gider",
+                            style: TextStyle(
+                              color:
+                                  !_isGelir
+                                      ? Colors.white
+                                      : Colors.grey.shade700,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
                   ),
                 ),
               ],
             ),
-          ),
-          const SizedBox(height: 20),
-          const Text(
-            "Kategori",
-            style: TextStyle(
-              fontSize: 13,
-              fontWeight: FontWeight.w500,
-              color: Colors.black54,
-            ),
-          ),
-          const SizedBox(height: 12),
-          SingleChildScrollView(
-            scrollDirection: Axis.horizontal,
-            physics: const BouncingScrollPhysics(),
-            child: Row(
-              children:
-                  aktifKategoriler.map((kat) {
-                    return Padding(
-                      padding: const EdgeInsets.only(right: 18.0),
-                      child: _kategoriButonu(
-                        kat["ikon"],
-                        kat["renk"],
-                        kat["baslik"],
-                      ),
-                    );
-                  }).toList(),
-            ),
-          ),
-          const SizedBox(height: 24),
-          const Text(
-            "Açıklama",
-            style: TextStyle(
-              fontSize: 13,
-              fontWeight: FontWeight.w500,
-              color: Colors.black54,
-            ),
-          ),
-          TextField(
-            controller: _aciklamaController,
-            decoration: InputDecoration(
-              hintText: "İşlem detayını yazın...",
-              hintStyle: TextStyle(color: Colors.grey.shade400, fontSize: 15),
-              enabledBorder: UnderlineInputBorder(
-                borderSide: BorderSide(color: Colors.grey.shade200),
+            const SizedBox(height: 24),
+
+            // TUTAR GİRİŞİ
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(20),
+                border: Border.all(color: Colors.grey.shade200),
               ),
-              focusedBorder: const UnderlineInputBorder(
-                borderSide: BorderSide(color: Color(0xFF0C4D3E)),
-              ),
-            ),
-          ),
-          const SizedBox(height: 24),
-          const Text(
-            "Tarih",
-            style: TextStyle(
-              fontSize: 13,
-              fontWeight: FontWeight.w500,
-              color: Colors.black54,
-            ),
-          ),
-          InkWell(
-            onTap: () => _takvimAc(context),
-            child: Padding(
-              padding: const EdgeInsets.symmetric(vertical: 12.0),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    "${_secilenTarih.day} ${_aylar[_secilenTarih.month - 1]} ${_secilenTarih.year}",
-                    style: const TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.black87,
+                    "Tutar",
+                    style: TextStyle(
+                      fontSize: 13,
+                      color: Colors.grey.shade500,
+                      fontWeight: FontWeight.w500,
                     ),
                   ),
-                  Icon(Icons.calendar_month, color: Colors.grey.shade700),
+                  TextField(
+                    controller: _tutarController,
+                    keyboardType: const TextInputType.numberWithOptions(
+                      decimal: true,
+                    ),
+                    inputFormatters: [
+                      FilteringTextInputFormatter.allow(RegExp(r'^\d+\.?\d*')),
+                    ],
+                    style: const TextStyle(
+                      fontSize: 26,
+                      fontWeight: FontWeight.bold,
+                    ),
+                    decoration: InputDecoration(
+                      prefixText: "₺ ",
+                      prefixStyle: const TextStyle(
+                        fontSize: 26,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.black87,
+                      ),
+                      border: InputBorder.none,
+                      hintText: "0.00",
+                      hintStyle: TextStyle(color: Colors.grey.shade300),
+                    ),
+                  ),
                 ],
               ),
             ),
-          ),
-          Divider(color: Colors.grey.shade200, height: 1),
-          const SizedBox(height: 24),
-          const Text(
-            "Ödeme Yöntemi",
-            style: TextStyle(
-              fontSize: 13,
-              fontWeight: FontWeight.w500,
-              color: Colors.black54,
+            const SizedBox(height: 20),
+
+            // KATEGORİ SEÇİCİ
+            const Text(
+              "Kategori",
+              style: TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w500,
+                color: Colors.black54,
+              ),
             ),
-          ),
-          const SizedBox(height: 12),
-          Row(
-            children: [
-              Expanded(
-                child: _odemeYontemiButonu(
-                  "Kart",
-                  Icons.credit_card,
-                  Colors.orange.shade700,
+            const SizedBox(height: 12),
+            SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              physics: const BouncingScrollPhysics(),
+              child: Row(
+                children:
+                    aktifKategoriler.map((kat) {
+                      return Padding(
+                        padding: const EdgeInsets.only(right: 18.0),
+                        child: _kategoriButonu(
+                          kat["ikon"],
+                          kat["renk"],
+                          kat["baslik"],
+                        ),
+                      );
+                    }).toList(),
+              ),
+            ),
+            const SizedBox(height: 24),
+
+            // AÇIKLAMA GİRİŞİ
+            const Text(
+              "Açıklama",
+              style: TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w500,
+                color: Colors.black54,
+              ),
+            ),
+            TextField(
+              controller: _aciklamaController,
+              decoration: InputDecoration(
+                hintText: "İşlem detayını yazın...",
+                hintStyle: TextStyle(color: Colors.grey.shade400, fontSize: 15),
+                enabledBorder: UnderlineInputBorder(
+                  borderSide: BorderSide(color: Colors.grey.shade200),
+                ),
+                focusedBorder: const UnderlineInputBorder(
+                  borderSide: BorderSide(color: Color(0xFF0C4D3E)),
                 ),
               ),
-              const SizedBox(width: 16),
-              Expanded(
-                child: _odemeYontemiButonu(
-                  "Nakit",
-                  Icons.payments_outlined,
-                  Colors.green.shade700,
+            ),
+            const SizedBox(height: 24),
+
+            // TARİH SEÇİCİ
+            const Text(
+              "Tarih",
+              style: TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w500,
+                color: Colors.black54,
+              ),
+            ),
+            InkWell(
+              onTap: () => _takvimAc(context),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(vertical: 12.0),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(
+                      "${_secilenTarih.day} ${_aylar[_secilenTarih.month - 1]} ${_secilenTarih.year}",
+                      style: const TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.black87,
+                      ),
+                    ),
+                    Icon(Icons.calendar_month, color: Colors.grey.shade700),
+                  ],
                 ),
               ),
-            ],
-          ),
-          const SizedBox(height: 16),
-        ],
+            ),
+            Divider(color: Colors.grey.shade200, height: 1),
+            const SizedBox(height: 24),
+
+            // ÖDEME YÖNTEMİ
+            const Text(
+              "Ödeme Yöntemi",
+              style: TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w500,
+                color: Colors.black54,
+              ),
+            ),
+            const SizedBox(height: 12),
+            Row(
+              children: [
+                Expanded(
+                  child: _odemeYontemiButonu(
+                    "Kart",
+                    Icons.credit_card,
+                    Colors.orange.shade700,
+                  ),
+                ),
+                const SizedBox(width: 16),
+                Expanded(
+                  child: _odemeYontemiButonu(
+                    "Nakit",
+                    Icons.payments_outlined,
+                    Colors.green.shade700,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 30),
+
+            // YENİ EN ALTTAKİ DEVASA KAYDET BUTONU
+            SizedBox(
+              width: double.infinity,
+              height: 55,
+              child: ElevatedButton(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF0C4D3E),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                ),
+                onPressed: _isSaving ? null : _veriyiKaydet,
+                child:
+                    _isSaving
+                        ? const SizedBox(
+                          width: 24,
+                          height: 24,
+                          child: CircularProgressIndicator(
+                            color: Colors.white,
+                            strokeWidth: 3,
+                          ),
+                        )
+                        : const Text(
+                          "İşlemi Kaydet",
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+              ),
+            ),
+            const SizedBox(height: 10),
+          ],
+        ),
       ),
     );
   }

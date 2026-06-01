@@ -1,11 +1,12 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:fl_chart/fl_chart.dart';
-import 'package:shared_preferences/shared_preferences.dart'; // Hafızadan ismi okumak için eklendi
+import 'package:shared_preferences/shared_preferences.dart';
 import '../utils/profile_state.dart';
 import '../widgets/hizli_islemler.dart';
 import '../widgets/son_islemler.dart';
 import '../services/api_service.dart';
+import '../services/hedef_service.dart';
 
 // Yönlendirmeler için gerekli ekranların importları
 import 'raporlar_screen.dart';
@@ -20,8 +21,12 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
-  String _seciliAy = "Mayıs 2026";
-  String _kullaniciIsmi = "Kullanıcı"; // Varsayılan isim değeri
+  String _seciliAy = "Haziran 2026";
+  String _kullaniciIsmi = "Kullanıcı";
+
+  // Manuel tetiklemeli refresh için controller'lar
+  final _hizliBaslikController = TextEditingController();
+  final _hizliTutarController = TextEditingController();
 
   final List<String> _aylar = [
     "Ocak 2026",
@@ -44,20 +49,102 @@ class _HomeScreenState extends State<HomeScreen> {
     _kullaniciIsminiYukle();
   }
 
-  // Kayıt sayfasında yazdığın ismi SharedPreferences'tan çeken fonksiyon
+  @override
+  void dispose() {
+    _hizliBaslikController.dispose();
+    _hizliTutarController.dispose();
+    super.dispose();
+  }
+
   Future<void> _kullaniciIsminiYukle() async {
     final prefs = await SharedPreferences.getInstance();
-    final isim = prefs.getString('userName'); // Register'da kaydettiğimiz key
+    final isim = prefs.getString('userName');
     if (isim != null && isim.isNotEmpty) {
+      String formatliIsim =
+          isim[0].toUpperCase() + isim.substring(1).toLowerCase();
       setState(() {
-        _kullaniciIsmi = isim;
+        _kullaniciIsmi = formatliIsim;
       });
-      // Eğer projedeki profile_state notifier yapısını tetiklemek istersen:
-      ProfileState.isimNotifier.value = isim;
+      ProfileState.isimNotifier.value = formatliIsim;
     }
   }
 
-  // EFSANEVİ VE ŞIK AY SEÇİCİ EKRANI (BOTTOM SHEET)
+  // --- HIZLI İŞLEM EKLEME MOTORU ---
+  void _hizliIslemEkle(String tip) async {
+    showDialog(
+      context: context,
+      builder:
+          (context) => AlertDialog(
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(20),
+            ),
+            title: Text(
+              tip == 'GELIR' ? "Gelir Kalemi Ekle" : "Gider Kalemi Ekle",
+              style: const TextStyle(
+                fontWeight: FontWeight.bold,
+                color: Color(0xFF0C4D3E),
+              ),
+            ),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                TextField(
+                  controller: _hizliBaslikController,
+                  decoration: const InputDecoration(
+                    hintText: "İşlem Başlığı (Örn: Maaş, Market)",
+                  ),
+                ),
+                const SizedBox(height: 10),
+                TextField(
+                  controller: _hizliTutarController,
+                  keyboardType: TextInputType.number,
+                  decoration: const InputDecoration(hintText: "Tutar (₺)"),
+                ),
+              ],
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text(
+                  "İptal",
+                  style: TextStyle(color: Colors.grey),
+                ),
+              ),
+              ElevatedButton(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF0C4D3E),
+                ),
+                onPressed: () async {
+                  double tutar =
+                      double.tryParse(_hizliTutarController.text) ?? 0.0;
+                  String baslik = _hizliBaslikController.text;
+
+                  if (baslik.isNotEmpty && tutar > 0) {
+                    final Map<String, dynamic> paket = {
+                      "baslik": baslik,
+                      "tutar": tutar,
+                      "islemTipi": tip,
+                    };
+
+                    bool basarili = await ApiService.islemEkle(paket);
+                    if (basarili) {
+                      _hizliBaslikController.clear();
+                      _hizliTutarController.clear();
+                      if (context.mounted) Navigator.pop(context);
+                      setState(() {}); // Ekranı tetikle
+                    }
+                  }
+                },
+                child: const Text(
+                  "Ekle",
+                  style: TextStyle(color: Colors.white),
+                ),
+              ),
+            ],
+          ),
+    );
+  }
+
   void _aySeciciyiAc() {
     showModalBottomSheet(
       context: context,
@@ -138,10 +225,14 @@ class _HomeScreenState extends State<HomeScreen> {
       backgroundColor: const Color(0xFFF5F7FA),
       body: SafeArea(
         child: FutureBuilder<List<dynamic>>(
-          future: ApiService.islemleriGetir(),
+          future: Future.wait([
+            ApiService.islemleriGetir(), // [0] -> Kalıcı Gelir/Giderler
+            HedefService.hedefleriGetir(), // [1] -> Kalıcı Kumbara Birikimleri
+          ]),
           builder: (context, snapshot) {
             double gelir = 0;
             double gider = 0;
+            double toplamTasarruf = 0;
 
             if (snapshot.connectionState == ConnectionState.waiting) {
               return const Center(
@@ -150,7 +241,9 @@ class _HomeScreenState extends State<HomeScreen> {
             }
 
             if (snapshot.hasData) {
-              for (var i in snapshot.data!) {
+              // 1. İşlemleri parse et (Gelir / Gider)
+              final islemler = snapshot.data![0];
+              for (var i in islemler) {
                 double tutar = double.tryParse(i['tutar'].toString()) ?? 0.0;
                 if (i['islemTipi'].toString().toUpperCase() == 'GELIR') {
                   gelir += tutar;
@@ -158,7 +251,15 @@ class _HomeScreenState extends State<HomeScreen> {
                   gider += tutar;
                 }
               }
+
+              // 2. Tasarruf Hedeflerini parse et (Kumbara Birikimi)
+              final hedefler = snapshot.data![1];
+              for (var hedef in hedefler) {
+                toplamTasarruf +=
+                    double.tryParse(hedef['birikenTutar'].toString()) ?? 0.0;
+              }
             }
+
             double bakiye = gelir - gider;
 
             return SingleChildScrollView(
@@ -168,10 +269,10 @@ class _HomeScreenState extends State<HomeScreen> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   const SizedBox(height: 16),
-                  _profilAlani(), // İsminin gözükeceği alan
+                  _profilAlani(),
                   const SizedBox(height: 24),
 
-                  // --- AYLIK ÖZET KARTI ---
+                  // --- AYLIK ÖZET MERKEZİ KART ---
                   Container(
                     width: double.infinity,
                     padding: const EdgeInsets.all(24),
@@ -229,15 +330,14 @@ class _HomeScreenState extends State<HomeScreen> {
                               ],
                             ),
                             GestureDetector(
-                              onTap: () {
-                                Navigator.push(
-                                  context,
-                                  MaterialPageRoute(
-                                    builder:
-                                        (context) => const RaporlarScreen(),
+                              onTap:
+                                  () => Navigator.push(
+                                    context,
+                                    MaterialPageRoute(
+                                      builder:
+                                          (context) => const RaporlarScreen(),
+                                    ),
                                   ),
-                                );
-                              },
                               child: Container(
                                 padding: const EdgeInsets.all(4),
                                 child: const Icon(
@@ -289,7 +389,7 @@ class _HomeScreenState extends State<HomeScreen> {
                                       ),
                                     ),
                                     Text(
-                                      "₺${bakiye.toStringAsFixed(2)}",
+                                      "₺${bakiye.toStringAsFixed(0)}",
                                       style: const TextStyle(
                                         fontSize: 24,
                                         fontWeight: FontWeight.w900,
@@ -302,12 +402,12 @@ class _HomeScreenState extends State<HomeScreen> {
                                           MainAxisAlignment.center,
                                       children: [
                                         Icon(
-                                          Icons.trending_up_rounded,
+                                          Icons.account_balance_wallet_rounded,
                                           color: Color(0xFF10B981),
                                           size: 14,
                                         ),
                                         Text(
-                                          " %12 artış",
+                                          " Net Durum",
                                           style: TextStyle(
                                             fontSize: 12,
                                             color: Color(0xFF10B981),
@@ -342,7 +442,7 @@ class _HomeScreenState extends State<HomeScreen> {
                               Icons.savings_outlined,
                               const Color(0xFF3B82F6),
                               "Tasarruf",
-                              "₺${bakiye.toStringAsFixed(0)}",
+                              "₺${toplamTasarruf.toStringAsFixed(0)}",
                               onTap: () {
                                 Navigator.push(
                                   context,
@@ -377,12 +477,11 @@ class _HomeScreenState extends State<HomeScreen> {
     return Row(
       children: [
         GestureDetector(
-          onTap: () {
-            Navigator.push(
-              context,
-              MaterialPageRoute(builder: (context) => const ProfilScreen()),
-            );
-          },
+          onTap:
+              () => Navigator.push(
+                context,
+                MaterialPageRoute(builder: (context) => const ProfilScreen()),
+              ),
           child: ValueListenableBuilder<File?>(
             valueListenable: ProfileState.resimNotifier,
             builder:
@@ -403,7 +502,6 @@ class _HomeScreenState extends State<HomeScreen> {
           crossAxisAlignment: CrossAxisAlignment.start,
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            // Doğrudan hafızadan yüklenen ismi ekrana basıyoruz!
             Text(
               "Merhaba, $_kullaniciIsmi 👋",
               style: const TextStyle(

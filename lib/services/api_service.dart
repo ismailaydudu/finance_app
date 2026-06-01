@@ -35,9 +35,13 @@ class ApiService {
   }
 
   // --- İŞLEMLERİ ÇEK (MEVCUT) ---
+  // --- İŞLEMLERİ ÇEK (DÜZELTİLMİŞ HALİ) ---
   static Future<List<dynamic>> islemleriGetir() async {
     try {
-      final response = await http.get(Uri.parse('$baseUrl/verileri-getir'));
+      // DİKKAT: '/verileri-getir' YERİNE '/islemler' YAZIYORUZ!
+      // Böylece kaydettiğimiz tabloyla okuduğumuz tablo aynı oluyor.
+      final response = await http.get(Uri.parse('$baseUrl/islemler'));
+
       if (response.statusCode == 200) {
         return json.decode(utf8.decode(response.bodyBytes));
       } else {
@@ -119,6 +123,35 @@ class ApiService {
       }
     } catch (e) {
       print("BAĞLANTI HATASI: $e");
+      return false;
+    }
+  }
+
+  static Future<bool> islemEkleRaw(Map<String, dynamic> islemVerisi) async {
+    try {
+      print(
+        "Backend'e giden veri: ${jsonEncode(islemVerisi)}",
+      ); // Log kaydı (Hata ayıklamak için)
+
+      final response = await http.post(
+        Uri.parse(baseUrl),
+        headers: {
+          "Content-Type": "application/json",
+          "Accept": "application/json",
+        },
+        body: jsonEncode(islemVerisi),
+      );
+
+      // Backend 200 veya 201 (Created) dönerse işlem tamamdır
+      if (response.statusCode == 200 || response.statusCode == 201) {
+        print("İşlem başarıyla backend'e kaydedildi.");
+        return true;
+      } else {
+        print("Backend Hatası: ${response.statusCode} - ${response.body}");
+        return false;
+      }
+    } catch (e) {
+      print("Bağlantı hatası (ApiService): $e");
       return false;
     }
   }

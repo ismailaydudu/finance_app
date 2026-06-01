@@ -83,4 +83,19 @@ class HedefService {
       return false;
     }
   }
+
+  // services/hedef_service.dart içine ekle:
+  static Future<bool> hedefEkleRaw(Map<String, dynamic> veri) async {
+    try {
+      final response = await http.post(
+        Uri.parse('http://192.168.1.19:8080/api/hedefler'), // IP'ni kontrol et!
+        headers: {"Content-Type": "application/json"},
+        body: jsonEncode(veri),
+      );
+      return response.statusCode == 200 || response.statusCode == 201;
+    } catch (e) {
+      print("Servis Hatası: $e");
+      return false;
+    }
+  }
 }

@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'home_screen.dart'; // Dosya ismini home_screen.dart olarak düzelttik
+import 'home_screen.dart';
 import 'islemler_screen.dart';
 import 'raporlar_screen.dart';
 import 'profil_screen.dart';
@@ -15,8 +15,9 @@ class MainLayout extends StatefulWidget {
 class _MainLayoutState extends State<MainLayout> {
   int _currentIndex = 0;
 
-  void _islemEkleSheetAc(BuildContext context) {
-    showModalBottomSheet(
+  // 1. DOKUNUŞ: async ve await eklendi. Pop-up'ın kapanmasını dinliyoruz.
+  void _islemEkleSheetAc(BuildContext context) async {
+    final sonuc = await showModalBottomSheet(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.white,
@@ -25,29 +26,22 @@ class _MainLayoutState extends State<MainLayout> {
       ),
       builder: (context) => const IslemEkleSheet(),
     );
+
+    // 2. DOKUNUŞ: Eğer IslemEkleSheet "true" döndürdüyse (işlem kaydedildiyse) ekranı yenile!
+    if (sonuc == true) {
+      setState(() {});
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     final List<Widget> sayfalar = [
-      const HomeScreen(), // Sınıf ismini HomeScreen() yaptık
+      // 3. DOKUNUŞ: Baştaki const silindi ve UniqueKey eklendi.
+      // Bu sayede setState tetiklendiğinde ekran mecburen API'den güncel parayı çekecek.
+      HomeScreen(key: UniqueKey()),
 
-      IslemlerScreen(
-        onTabBack: () {
-          setState(() {
-            _currentIndex = 0; // İşlemlerde basınca Home'a döner
-          });
-        },
-      ),
-
-      RaporlarScreen(
-        onTabBack: () {
-          setState(() {
-            _currentIndex = 0; // Raporlarda basınca Home'a döner
-          });
-        },
-      ),
-
+      IslemlerScreen(onTabBack: () => setState(() => _currentIndex = 0)),
+      RaporlarScreen(onTabBack: () => setState(() => _currentIndex = 0)),
       const ProfilScreen(),
     ];
 
@@ -64,10 +58,15 @@ class _MainLayoutState extends State<MainLayout> {
       floatingActionButtonLocation: FloatingActionButtonLocation.centerDocked,
 
       bottomNavigationBar: BottomAppBar(
-        shape: const CircularNotchedRectangle(),
+        shape: const AutomaticNotchedShape(
+          RoundedRectangleBorder(
+            borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+          ),
+          CircleBorder(),
+        ),
         notchMargin: 8.0,
         color: Colors.white,
-        elevation: 10,
+        elevation: 15,
         clipBehavior: Clip.antiAlias,
         child: SizedBox(
           height: 60,
@@ -88,15 +87,22 @@ class _MainLayoutState extends State<MainLayout> {
   }
 
   Widget _navBarButonu(IconData ikon, String etiket, int index) {
-    bool aktifMi = _currentIndex == index;
+    bool aktifMi = _currentIndex == index && index != 3;
     Color aktifRenk = const Color(0xFF0C4D3E);
     Color pasifRenk = Colors.grey.shade400;
 
     return GestureDetector(
       onTap: () {
-        setState(() {
-          _currentIndex = index;
-        });
+        if (index == 3) {
+          Navigator.push(
+            context,
+            MaterialPageRoute(builder: (context) => const ProfilScreen()),
+          );
+        } else {
+          setState(() {
+            _currentIndex = index;
+          });
+        }
       },
       behavior: HitTestBehavior.opaque,
       child: Column(
